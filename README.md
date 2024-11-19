@@ -11,9 +11,5 @@
 To install `evc`:
 
 ```r
-remotes::install_github("mrc-ide/evc", upgrade = FALSE)
+remotes::install_github("potoole7/evc", upgrade = FALSE)
 ```
-
-## License
-
-MIT © Imperial College of Science, Technology and Medicine
