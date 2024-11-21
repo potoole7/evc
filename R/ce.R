@@ -111,7 +111,7 @@ fit_ce <- \(
 #' @param jitter Add jitter to data to remove 0s.
 #' @param thresh return thresholded (i.e. filtered) data if TRUE.
 #' @return Dataframe with `thresh` and `excess` columns, optionally thresholded.
-#' @export
+#' @keywords internal
 # TODO: Vary tau and see how that effects results (QQ plots, etc)
 quantile_thresh <- function(
   data, 
@@ -160,6 +160,7 @@ quantile_thresh <- function(
 #' @param pred_data Dataframe for one location to predict on.
 #' @param f Formula for `evgam` model.
 #' @return List with model `m` and predictions `predictions`.
+#' @keywords internal
 fit_evgam <- \(
   data, 
   pred_data,
@@ -182,9 +183,14 @@ fit_evgam <- \(
   ))
 }
 
-# create marginal `migpd` objects from `evgam` objects for each site
-# - data_gpd: scale and shape parameters for each location
-# - data: Data for each location
+#' @title Generate marginal `migpd` objects
+#' @description Generate marginal `migpd` objects from `evgam` objects for each
+#' site.
+#' @param data_gpd Scale and shape parameters for each location.
+#' @param data Data for each location.
+#' @param mqu Marginal quantile for thresholding.
+#' @return List of `migpd` objects for each location.
+#' @keywords internal
 gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
   # Create "dummy" migpd object to fill in with evgam values
   dat_mat <- data |> 
@@ -202,7 +208,7 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
     # browser()
     spec_marg <- temp
     # replace data 
-    # TODO: Extend to work for more variables(?)
+    # TODO: Extend to work for more variables than just rain and wind_speed
     spec_marg$data <- data |> 
       dplyr::filter(name == data_gpd$name[i]) |> 
       dplyr::select(rain, wind_speed) |> 
@@ -230,7 +236,15 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
   return(marginal)
 }
 
-# Fit CE dependence model for each site
+#' @title Fit `texmex` dependence model
+#' @description Fit `texmex` dependence model for each site.
+#' @param marginal List of `migpd` objects for each site.
+#' @param vars Variables to fit dependence on.
+#' @param mex_dep_args Arguments to pass to \link[texmex]{mexDependence}.
+#' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
+#' (see \link[texmex]{mexDependence} for details).
+#' @return List of `mexDependence` objects for each site.
+#' @keywords internal
 fit_texmex_dep <- \(
   marginal, 
   vars = c("rain", "wind_speed"), 
