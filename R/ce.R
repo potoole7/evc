@@ -15,6 +15,7 @@
 #' @param f Formula for `evgam` model.
 #' @param split_data if `data` has variables stacked, unstack. 
 #' @return Object of type `mexDependence` for each location.
+#' @rdname fit_ce
 #' @export
 fit_ce <- \(
   data, 
