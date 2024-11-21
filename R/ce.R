@@ -24,12 +24,15 @@ fit_ce <- \(
   f = list(excess ~ name, ~ 1), # keep shape constant for now
   split_data = TRUE
 ) {
+
+  # initialise to remove `devtools::check()` note
+  name <- excess <- shape <- NULL
   
   # convert to dataframe
   # TODO: Tidy up, quite verbose
   # TODO: Need to extend to multiple variables, using length of vars
   if (split_data) {
-    data_df <- bind_rows(lapply(seq_along(data), \(i) {
+    data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
       n <- length(data[[i]])
       data.frame(
         "rain"       = data[[i]][1:(n / 2)],
@@ -38,7 +41,7 @@ fit_ce <- \(
         dplyr::mutate(name = paste0("location_", i))
     }))
   } else {
-    data_df <- bind_rows(lapply(seq_along(data), \(i) {
+    data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
       as.data.frame(data[[i]]) |> 
         dplyr::mutate(name = paste0("location_", i))
     }))
@@ -47,7 +50,7 @@ fit_ce <- \(
   
   # First, calculate threshold (90th quantile across all locations)
   # TODO: Allow use of `quantile_thresh` here
-  thresh <- apply(data_df[, 1:2], 2, quantile, marg_prob)
+  thresh <- apply(data_df[, 1:2], 2, stats::quantile, marg_prob)
   
   # for each variable, calculate excess over threshold
   data_thresh <- lapply(vars, \(x) {
@@ -55,7 +58,7 @@ fit_ce <- \(
       dplyr::select(dplyr::matches(x), name) |> 
       dplyr::mutate(
         thresh = thresh[x],
-        excess = !!sym(x) - thresh
+        excess = !!rlang::sym(x) - thresh
       ) |> 
       dplyr::filter(excess > 0)
   })
@@ -76,7 +79,7 @@ fit_ce <- \(
   
   # Join scale and shape estimates into data
   # TODO: Functionalise to work with > 2 variables
-  data_gpd <- distinct(data_df, name) |> 
+  data_gpd <- dplyr::distinct(data_df, name) |> 
     dplyr::bind_cols(
       dplyr::rename(
         dplyr::distinct(evgam_fit[[1]]$predictions), 
@@ -118,13 +121,15 @@ quantile_thresh <- function(
   response, 
   f = list(
     # response ~ s(lon, lat, k = 50), # location
-    formula(paste(response, " ~ s(lon, lat, k = 50)")), # location
+    stats::formula(paste(response, " ~ s(lon, lat, k = 50)")), # location
     ~ s(lon, lat, k = 40)                               # logscale
   ), 
   tau = .95, 
   jitter = TRUE, 
   thresh = TRUE
 ) {
+
+  excess <- NULL
   
   # jitter, if specified, to remove 0s when calculating quantiles
   if (jitter == TRUE) {
@@ -142,9 +147,10 @@ quantile_thresh <- function(
   # add threshold to data
   data_thresh <- data |> 
     dplyr::mutate(
-      thresh = evgam:::predict.evgam(ald_fit)$location, 
+      # thresh = evgam:::predict.evgam(ald_fit)$location, 
+      thresh = stats::predict(ald_fit)$location, 
       # excess = wind_speed - thresh
-      excess = !!sym(response) - thresh
+      excess = !!rlang::sym(response) - thresh
     )
   # threshold if desired
   if (thresh == TRUE) {
@@ -174,7 +180,8 @@ fit_evgam <- \(
   m <- evgam::evgam(f, data = data, family = "gpd")
 
   # create predictions
-  predictions <- evgam:::predict.evgam(m, pred_data, type = "response")
+  # predictions <- evgam:::predict.evgam(m, pred_data, type = "response")
+  predictions <- stats::predict(m, pred_data, type = "response")
   
   # return model fit and predictions
   return(list(
@@ -192,6 +199,9 @@ fit_evgam <- \(
 #' @return List of `migpd` objects for each location.
 #' @keywords internal
 gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
+
+  name <- rain <- wind_speed <- NULL
+
   # Create "dummy" migpd object to fill in with evgam values
   dat_mat <- data |> 
     dplyr::filter(name == data$name[[1]]) |> 
