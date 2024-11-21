@@ -62,18 +62,17 @@ fit_ce <- \(
       ) |> 
       dplyr::filter(excess > 0)
   })
-  
+
   # Now fit evgam model for each marginal
   # TODO: Is just fitting different models by loc appropriate? (Yes I think!)
   # TODO: Allow use of base `texmex` as well!
 
   evgam_fit <- lapply(data_thresh, \(x) {
     fit_evgam(
-      data = x, 
+      data = x,
       pred_data = x,
       # model scale and shape for each location
-      # f = list(excess ~ name, ~ name) 
-      f = f 
+      f = f
     )
   })
   
@@ -147,9 +146,7 @@ quantile_thresh <- function(
   # add threshold to data
   data_thresh <- data |> 
     dplyr::mutate(
-      # thresh = evgam:::predict.evgam(ald_fit)$location, 
       thresh = stats::predict(ald_fit)$location, 
-      # excess = wind_speed - thresh
       excess = !!rlang::sym(response) - thresh
     )
   # threshold if desired
@@ -180,7 +177,6 @@ fit_evgam <- \(
   m <- evgam::evgam(f, data = data, family = "gpd")
 
   # create predictions
-  # predictions <- evgam:::predict.evgam(m, pred_data, type = "response")
   predictions <- stats::predict(m, pred_data, type = "response")
   
   # return model fit and predictions
@@ -210,12 +206,9 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
   names(dat_mat) <- c("rain", "wind_speed")
   
   temp <- texmex::migpd(dat_mat, mqu = mqu, penalty = "none")
-  # m <- evm(y = rain, data = data, qu = 0.95, penalty = "none", famuly = "gpd")
-  # m1 <- update(m, phi = ~lon + lat)
   
   marginal <- lapply(seq_len(nrow(data_gpd)), \(i) {
     # initialise
-    # browser()
     spec_marg <- temp
     # replace data 
     # TODO: Extend to work for more variables than just rain and wind_speed
@@ -225,18 +218,14 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
       as.matrix()
     names(spec_marg$data) <- c("rain", "wind_speed")
     # replace thresholds
-    # spec_marg$models$rain$threshold <- thresh_rain
-    # spec_marg$models$wind_speed$threshold <- thresh_wind
     spec_marg$models$rain$threshold <- data_gpd$thresh_rain[[i]]
     spec_marg$models$wind_speed$threshold <- data_gpd$thresh_wind[[i]]
     # replace coefficients
     spec_marg$models$rain$coefficients[1:2] <- c(
-      # data_gpd$scale_rain[i], 
       log(data_gpd$scale_rain[i]),
       data_gpd$shape_rain[i]
     )
     spec_marg$models$wind_speed$coefficients[1:2] <- c(
-      # data_gpd$scale_ws[i], 
       log(data_gpd$scale_ws[i]), 
       data_gpd$shape_ws[i]
     )
@@ -298,4 +287,3 @@ fit_texmex_dep <- \(
   names(dependence) <- names(marginal)
   return(dependence)
 }
-
