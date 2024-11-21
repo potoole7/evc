@@ -3,10 +3,21 @@
 # TODO: Document functions
 # TODO: Extend to more than 2 variables
 # TODO: Write tests for functions
+# TODO: Allow use of base `texmex` with `fit_ce`
 
-# Function to fit CE model
+#' @title Fit Conditional Extremes model
+#' @description Fit Conditional Extremes model using marginal fits form `evgam`.
+#' @param data List of dataframes at each location containing data for each 
+#' variable.
+#' @param vars Variable names for each location.
+#' @param marg_prob Marginal quantile for thresholding.
+#' @param cond_prob Conditional quantile for dependence modelling.
+#' @param f Formula for `evgam` model.
+#' @param split_data if `data` has variables stacked, unstack. 
+#' @return Object of type `mexDependence` for each location.
+#' @export
 fit_ce <- \(
-  data_mix, 
+  data, 
   vars = c("rain", "wind_speed"), 
   marg_prob = 0.9,
   cond_prob = 0.9,
@@ -16,39 +27,43 @@ fit_ce <- \(
   
   # convert to dataframe
   # TODO: Tidy up, quite verbose
+  # TODO: Need to extend to multiple variables, using length of vars
   if (split_data) {
-    data_df <- bind_rows(lapply(seq_along(data_mix), \(i) {
-      n <- length(data_mix[[i]])
+    data_df <- bind_rows(lapply(seq_along(data), \(i) {
+      n <- length(data[[i]])
       data.frame(
-        "rain"       = data_mix[[i]][1:(n / 2)],
-        "wind_speed" = data_mix[[i]][((n / 2) + 1):n]
-      ) %>% 
-        mutate(name = paste0("location_", i))
+        "rain"       = data[[i]][1:(n / 2)],
+        "wind_speed" = data[[i]][((n / 2) + 1):n]
+      ) |> 
+        dplyr::mutate(name = paste0("location_", i))
     }))
   } else {
-    data_df <- bind_rows(lapply(seq_along(data_mix), \(i) {
-      as.data.frame(data_mix[[i]]) %>% 
-        mutate(name = paste0("location_", i))
+    data_df <- bind_rows(lapply(seq_along(data), \(i) {
+      as.data.frame(data[[i]]) |> 
+        dplyr::mutate(name = paste0("location_", i))
     }))
-    names(data_df)[1:2] <- c("rain", "wind_speed")
+    names(data_df)[1:2] <- c("rain", "wind_speed") # TODO: Change to var_j
   }
   
   # First, calculate threshold (90th quantile across all locations)
+  # TODO: Allow use of `quantile_thresh` here
   thresh <- apply(data_df[, 1:2], 2, quantile, marg_prob)
   
   # for each variable, calculate excess over threshold
   data_thresh <- lapply(vars, \(x) {
-    data_df %>% 
-      dplyr::select(matches(x), name) %>% 
-      mutate(
+    data_df |> 
+      dplyr::select(dplyr::matches(x), name) |> 
+      dplyr::mutate(
         thresh = thresh[x],
         excess = !!sym(x) - thresh
-      ) %>% 
-      filter(excess > 0)
+      ) |> 
+      dplyr::filter(excess > 0)
   })
   
   # Now fit evgam model for each marginal
   # TODO: Is just fitting different models by loc appropriate? (Yes I think!)
+  # TODO: Allow use of base `texmex` as well!
+
   evgam_fit <- lapply(data_thresh, \(x) {
     fit_evgam(
       data = x, 
@@ -61,14 +76,14 @@ fit_ce <- \(
   
   # Join scale and shape estimates into data
   # TODO: Functionalise to work with > 2 variables
-  data_gpd <- distinct(data_df, name) %>% 
-    bind_cols(
-      rename(
-        distinct(evgam_fit[[1]]$predictions), 
+  data_gpd <- distinct(data_df, name) |> 
+    dplyr::bind_cols(
+      dplyr::rename(
+        dplyr::distinct(evgam_fit[[1]]$predictions), 
         scale_rain = scale, 
         shape_rain = shape),
-      rename(
-        distinct(evgam_fit[[2]]$predictions), 
+      dplyr::rename(
+        dplyr::distinct(evgam_fit[[2]]$predictions), 
         scale_ws = scale, 
         shape_ws = shape),
     )
@@ -85,40 +100,66 @@ fit_ce <- \(
   ))
 }
 
-# function to fit varying threshold using quantile regression
-# https://empslocal.ex.ac.uk/people/staff/by223/software/gpd.R
+#' @title `evgam` varying threshold
+#' @description Fit varying threshold using quantile regression, as in
+#' https://empslocal.ex.ac.uk/people/staff/by223/software/gpd.R.
+#' @param data Dataframe for one location which we wish to 
+#' threshold.
+#' @param response Name of variable to threshold.
+#' @param f Formula for `evgam` model.
+#' @param tau Quantile to threshold at (see \link[evgam]{evgam} for details)
+#' @param jitter Add jitter to data to remove 0s.
+#' @param thresh return thresholded (i.e. filtered) data if TRUE.
+#' @return Dataframe with `thresh` and `excess` columns, optionally thresholded.
+#' @export
 # TODO: Vary tau and see how that effects results (QQ plots, etc)
-# quantile_thresh <- function(data, response, tau = .95) {
-quantile_thresh <- function(data, response, tau = .95, jitter = TRUE) {
-  fm_ald <- list(
+quantile_thresh <- function(
+  data, 
+  response, 
+  f = list(
     # response ~ s(lon, lat, k = 50), # location
     formula(paste(response, " ~ s(lon, lat, k = 50)")), # location
     ~ s(lon, lat, k = 40)                               # logscale
-  )
+  ), 
+  tau = .95, 
+  jitter = TRUE, 
+  thresh = TRUE
+) {
   
   # jitter, if specified, to remove 0s when calculating quantiles
   if (jitter == TRUE) {
-    data <- data %>%
-      mutate(across(all_of(response), ~ . + rnorm(n(), 0, 1e-6)))
+    data <- data |>
+      dplyr::mutate(
+        dplyr::across(dplyr::all_of(response), ~ . + stats::rnorm(n(), 0, 1e-6))
+      )
   }
   
   # fit the quantile regression model at tau'th percentile
   ald_fit <- evgam::evgam(
-    fm_ald, data, family = "ald", ald.args = list(tau = tau)
+    f, data, family = "ald", ald.args = list(tau = tau)
   )
   
-  # add threshold to data and filter
-  data %>% 
-    mutate(
+  # add threshold to data
+  data_thresh <- data |> 
+    dplyr::mutate(
       thresh = evgam:::predict.evgam(ald_fit)$location, 
       # excess = wind_speed - thresh
       excess = !!sym(response) - thresh
-    ) %>% 
-    filter(excess > 0) %>% 
-    return()
+    )
+  # threshold if desired
+  if (thresh == TRUE) {
+    data_thresh <- dplyr::filter(data_thresh, excess > 0)
+  }
+
+  return(data_thresh)
 }
 
-# Fit evgam model with spline for spatial location, create predictions
+#' @title Fit `evgam` model 
+#' @description Fit and generate predictions from `evgam` model 
+#' @param data Dataframe for one location.
+#' @param pred_data Dataframe for one location to predict on.
+#' @param f Formula for `evgam` model.
+#' @return List with model `m` and predictions `predictions`.
 fit_evgam <- \(
   data, 
   pred_data,
@@ -128,11 +169,6 @@ fit_evgam <- \(
     ~ s(lon, lat, k = 40) # shape parameter
   ) 
 ) {
-  # model formula
-  # f <- list(
-  #   excess ~ s(lon, lat, k = 40), # increase smoothing on scale parameter
-  #   ~ s(lon, lat, k = 40) # shape parameter
-  # ) 
   # fit evgam model
   m <- evgam::evgam(f, data = data, family = "gpd")
 
@@ -151,9 +187,9 @@ fit_evgam <- \(
 # - data: Data for each location
 gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
   # Create "dummy" migpd object to fill in with evgam values
-  dat_mat <- data %>% 
-    filter(name == data$name[[1]]) %>% 
-    dplyr::select(rain, wind_speed) %>% 
+  dat_mat <- data |> 
+    dplyr::filter(name == data$name[[1]]) |> 
+    dplyr::select(rain, wind_speed) |> 
     as.matrix()
   names(dat_mat) <- c("rain", "wind_speed")
   
@@ -166,9 +202,10 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
     # browser()
     spec_marg <- temp
     # replace data 
-    spec_marg$data <- data %>% 
-      filter(name == data_gpd$name[i]) %>% 
-      dplyr::select(rain, wind_speed) %>% 
+    # TODO: Extend to work for more variables(?)
+    spec_marg$data <- data |> 
+      dplyr::filter(name == data_gpd$name[i]) |> 
+      dplyr::select(rain, wind_speed) |> 
       as.matrix()
     names(spec_marg$data) <- c("rain", "wind_speed")
     # replace thresholds
