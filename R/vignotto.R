@@ -1,3 +1,67 @@
+# function to calculate KL divergence between any two locations
+emp_kl_div <- \(x, y, prob = 0.9) {
+  # stopifnot(length(x) == length(y))
+  
+  # split x and y in half (rain vs wind speed)
+  # remove NAs from x and y from padding matrix
+  x <- x[!is.na(x)]
+  y <- y[!is.na(y)]
+  n <- length(x)
+  m <- length(y) # need for m???
+
+  # TODO: Make more general for multivariate (not bivariate) case
+  df_lst <- list(
+  # x_df <- data.frame(
+    "x" = data.frame(
+      "rain"       = x[1:(n / 2)],
+      "wind_speed" = x[((n / 2) + 1):n]
+    ),
+    "y" = data.frame(
+    "rain"       = y[1:(m / 2)],
+    "wind_speed" = y[((m / 2) + 1):m]
+    )
+  )
+  
+  # convert to Pareto scale
+  df_lst_par <- df_lst
+  df_lst_par <- lapply(df_lst, \(z) {
+    data.frame(apply(z, 2, pareto_trans))
+  })
+  
+  # partition into 3 subsets
+  df_part <- lapply(df_lst_par, \(z) {
+    partition_max(list(z[, 1], z[, 2]), prob = prob)
+  })
+  
+  # fail if there are any 0s
+  stopifnot(
+    "No set can contain zeros, reduce `prob`" = all(unlist(df_part) != 0)
+  )
+  
+  # calculate proportions of partitions
+  df_part_prop <- lapply(df_part, \(z) {
+    denom <- sum(unlist(z)) # denominator is # extreme obs
+    lapply(z, `/`, denom) # find prop of extreme obs for each disjoint set
+  })
+  
+  # calculate proportions of partitions
+  x_part <- df_part_prop[[1]]
+  y_part <- df_part_prop[[2]]
+  if (print) {
+    print(paste0("both for x: ", round(x_part$both, 3)))
+    print(paste0("both for y: ", round(y_part$both, 3)))
+  }
+  sum_vals <- vector(length = length(x_part))
+  for (i in seq_along(sum_vals)) { 
+    sum_vals[i] <- (x_part[[i]] - y_part[[i]]) * 
+                      log(x_part[[i]] / y_part[[i]])
+  }
+  # sum_vals[is.nan(sum_vals) | is.infinite(sum_vals)] <- 0
+  if (any(is.nan(sum_vals) | is.infinite(sum_vals), na.rm = TRUE)) return(NA)
+  return((1  / 2) * sum(sum_vals))
+}
+
+
 # Function to calculate KL divergence for 2 cluster simulation dataset
 kl_sim_eval <- \(
   data_mix, # Mixture data from copulas
@@ -131,87 +195,5 @@ calc_prop <- \(x) {
   ret <- lapply(x, \(y) y / denom)
   names(ret) <- names(x)
   return(ret)
-}
-
-# function to calculate KL divergence between any two locations
-emp_kl_div <- \(x, y, convert_pareto = TRUE, prob = 0.9, print = TRUE, plot = FALSE) {
-  # stopifnot(length(x) == length(y))
-  
-  # split x and y in half (rain vs wind speed)
-  # remove NAs from x and y from padding matrix
-  x <- x[!is.na(x)]
-  y <- y[!is.na(y)]
-  n <- length(x)
-  m <- length(y) # need for m???
-  # TODO: Make more general for multivariate (not bivariate) case
-  df_lst <- list(
-  # x_df <- data.frame(
-    "x" = data.frame(
-      "rain"       = x[1:(n / 2)],
-      "wind_speed" = x[((n / 2) + 1):n]
-    ),
-    "y" = data.frame(
-    "rain"       = y[1:(m / 2)],
-    "wind_speed" = y[((m / 2) + 1):m]
-    )
-  )
-  
-  if (print) {
-    n_both <- lapply(df_lst, \(z) {
-      nrow(filter(
-        z, 
-        rain > quantile(rain, prob), 
-        wind_speed > quantile(wind_speed, prob)
-      ))
-    })
-    print(paste0("Number both extreme for x before rescaling: ", n_both[[1]]))
-    print(paste0("Number both extreme for y before rescaling: ", n_both[[2]]))
-  }
-   
-  # convert to Pareto scale
-  df_lst_par <- df_lst
-  if (convert_pareto) {
-    df_lst_par <- lapply(df_lst, \(z) {
-      data.frame(apply(z, 2, pareto_trans))
-    })
-    # plot on pareto margins
-    if (plot) {
-      par(mfrow = c(1, 2)) # TODO: Make more general for MV case
-      lapply(df_lst_par, plot)
-      par(mfrow = c(1, 1))
-    }
-  }
-  
-  # partition into 3 subsets
-  df_part <- lapply(df_lst_par, \(z) {
-    partition_max(list(z[, 1], z[, 2]), prob = prob)
-  })
-  
-  # fail if there are any 0s
-  stopifnot(
-    "No set can contain zeros, reduce `prob`" = all(unlist(df_part) != 0)
-  )
-  
-  # calculate proportions of partitions
-  df_part_prop <- lapply(df_part, \(z) {
-    denom <- sum(unlist(z)) # denominator is # extreme obs
-    lapply(z, `/`, denom) # find prop of extreme obs for each disjoint set
-  })
-  
-  # calculate proportions of partitions
-  x_part <- df_part_prop[[1]]
-  y_part <- df_part_prop[[2]]
-  if (print) {
-    print(paste0("both for x: ", round(x_part$both, 3)))
-    print(paste0("both for y: ", round(y_part$both, 3)))
-  }
-  sum_vals <- vector(length = length(x_part))
-  for (i in seq_along(sum_vals)) { 
-    sum_vals[i] <- (x_part[[i]] - y_part[[i]]) * 
-                      log(x_part[[i]] / y_part[[i]])
-  }
-  # sum_vals[is.nan(sum_vals) | is.infinite(sum_vals)] <- 0
-  if (any(is.nan(sum_vals) | is.infinite(sum_vals), na.rm = TRUE)) return(NA)
-  return((1  / 2) * sum(sum_vals))
 }
 
