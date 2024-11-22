@@ -19,6 +19,9 @@ Imports:
   mclust,
   cluster,
   proxy,
+  sf,
+  spdep,
+  ggplot2,
   stats
 Suggests:
     testthat (>= 3.0.0)
