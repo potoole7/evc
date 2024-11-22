@@ -96,7 +96,7 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
 #' @param areas Spatial polygons object
 #' @param clust_obj Clustering object
 #' @return ggplot object
-#' @rdname plot_clust
+#' @rdname plt_clust
 #' @export
 # TODO: Could make this ggplot method for object
 plt_clust <- \(pts, areas, clust_obj) {
