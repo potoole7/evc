@@ -1,5 +1,22 @@
 # Function to calculate and cluster on the Jensen-Shannon Divergence for 
 # the conditional extremes model
+#' @title Cluster based on Jensen-Shannon divergence for conditional extremes
+#' model
+#' @description Function to calculate and cluster on the Jensen-Shannon
+#' Divergence for the conditional extremes model.
+#' @param dependence List of `mexDependence` objects for each location.
+#' @param nclust Number of clusters to fit.
+#' @param cluster_mem Optional known cluster memberships for each location,
+#' which can be used to evaluate the quality of the clustering.
+#' @param dat_max_mult Multiplier for the maximum multiple of the largest
+#' threshold across all locations.
+#' @param n_dat Number of data points to use in the Jensen-Shannon divergence.
+#' @return List containing the clustering results and, if `cluster_mem` is
+#' provided, the adjusted Rand index.
+#' @rdname js_clust
+#' @export
+# TODO: Document how globally largest threshold is used as data
+# TODO: Document how pam is also used here
 js_clust <- \(
   dependence,
   nclust = 3,
@@ -18,8 +35,7 @@ js_clust <- \(
   thresh <- lapply(dependence, pull_thresh_trans)
   
   # take maximum Laplace thresholds; want to geenra
-  # thresh_max <- apply(bind_rows(thresh), 2, max)
-  thresh_max <- lapply(bind_rows(thresh), max)
+  thresh_max <- lapply(dplyr::bind_rows(thresh), max)
   
   # list of locs -> list of len 2 of variables, each containing all locs
   params <- purrr::transpose(params)
@@ -36,16 +52,7 @@ js_clust <- \(
   
   # sum distance matrices over different variables together
   dist_mat <- do.call(`+`, dist_mats)
-  # scree plots look to suggest 3 clusters for both
-  # lapply(dist_mats, scree_plot) 
-  # lapply(dist_mats, scree_plot, fun = kmeans) 
-  
-  # cluster for rain and wind speed using both k-means and PAM
-  # js_clust <- lapply(dist_mats, \(x) {
-  #   lapply(c(pam, kmeans), \(fun) {
-  #     fun(x, 3)
-  #   })
-  # })
+
   # cluster for rain and wind speed using PAM
   pam_js_clust <- cluster::pam(dist_mat, k = nclust)
   ret <- list("pam" = pam_js_clust)
@@ -55,7 +62,6 @@ js_clust <- \(
       pam_js_clust$clustering, 
       cluster_mem
     )
-    # print(paste0("adjusted Rand index" = adj_rand))
     ret <- c(ret, list("adj_rand" = adj_rand))
   }
   
@@ -63,12 +69,15 @@ js_clust <- \(
 }
 
 
-# pull a, b, mu, sigma for a given location
-# dep - List of mex objects (i.e. CE models for each var) for single location
+#' @title Pull parameters for conditional extremes model
+#' @description Function to pull the parameters (a, b, m and s) for the 
+#' conditional extremes model.
+#' @param dep List of `mexDependence` objects for each location.
+#' @return List of named vectors containing the parameters for each location.
+#' @keywords internal
 pull_params <- \(dep) {
   # fail if not list of mex objects for single location
   stopifnot(is.list(dep))
-  # stopifnot(all(vapply(dep, class, character(1)) == "mex"))
   # loop through conditioning variables for single location
   return(lapply(dep, \(x) {
     # pull parameter vals
@@ -82,8 +91,12 @@ pull_params <- \(dep) {
   }))
 }
 
-# pull thresholds
-# dep - List of mex objects (i.e. CE models for each var) for single location
+#' @title Pull thresholds for conditional extremes model
+#' @description Function to pull the thresholds for the conditional extremes
+#' model.
+#' @param dep List of `mexDependence` objects for each location.
+#' @return List of named vectors containing the thresholds for each location.
+#' @keywords internal
 pull_thresh_trans <- \(dep) {
   # fail if not list of mex objects for single location
   stopifnot(is.list(dep))
@@ -92,35 +105,67 @@ pull_thresh_trans <- \(dep) {
   return(lapply(dep, \(x) x$dependence$dth))
 }
 
-# function to calculate KL divergence for single data point
-# derivation at https://statproofbook.github.io/P/norm-kl.html
+#' @title Calculate KL divergence between two Gaussian distributions
+#' @description Function to calculate the Kullback-Leibler divergence between
+#' two Gaussian distributions, using the closed form solution for the case of
+#' two univariate Gaussians provided at
+#' \href{https://statproofbook.github.io/P/norm-kl.html}{test}.
+#' @param mu1 Mean of the first Gaussian distribution.
+#' @param mu2 Mean of the second Gaussian distribution.
+#' @param var1 Variance of the first Gaussian distribution.
+#' @param var2 Variance of the second Gaussian distribution.
+#' @return The Kullback-Leibler divergence between the two Gaussian
+#' distributions.
+#' @keywords internal
+# TODO: Have mus and variances as lists perhaps?
 kl_gauss <- \(mu1, mu2, var1, var2) {
   return(1 / 2 * (
     (mu2 - mu1)^2 / var2 + (var1 / var2) - log(var1 / var2) - 1
   ))
 }
 
-# function to calculate Jensen-Shannon divergence metric from KL divergence
-# This metric is symmetric, as required for clustering 
-# https://tinyurl.com/526rwy9f
+#' @title Calculate Jensen-Shannon divergence between two Gaussian distributions
+#' @description Function to calculate the Jensen-Shannon divergence between two
+#' Gaussian distributions, using the Kullback-Leibler divergence between them.
+#' This metric is symmetric, as required for clustering. 
+#' @param mu1 Mean of the first Gaussian distribution.
+#' @param mu2 Mean of the second Gaussian distribution.
+#' @param var1 Variance of the first Gaussian distribution.
+#' @param var2 Variance of the second Gaussian distribution.
+#' @return The Jensen-Shannon divergence between the two Gaussian
+#' distributions.
+#' @keywords internal
 js_gauss <- \(mu1, mu2, var1, var2) {
   # calculate mean, variance for mixture distribution M = (P + Q)/2
   # Sum of normals as in https://online.stat.psu.edu/stat414/lesson/26/26.1
-  # (N(u1, v1) + N(u2, v2)) / 2 = N((u1 + u2) / 2, (v1 + v2) / 2^2)
-  mu_m <- (mu1 + mu2) / 2 
+  mu_m <- (mu1 + mu2) / 2
   var_m <- (var1 + var2) / 4
-  
+
   # calculate JS(P||Q) = ((KL(P||M)) + KL(Q||M))/2
   # TODO: Check that this is right, shouldn't it be var2 for second kl_gauss?
   # TODO: Unit test this is symmetric, previously wasn't (?)
   return(
-    # (kl_gauss(mu1, mu_m, var1, var_m) + kl_gauss(mu2, mu_m, var1, var_m)) / 2
     (kl_gauss(mu1, mu_m, var1, var_m) + kl_gauss(mu2, mu_m, var2, var_m)) / 2
   )
 }
 
-# Function to calculate Jensen-Shannon divergence for each data point
-js_div <- \(params_x, params_y, thresh_max, data_max = 2 * thresh_max, n_dat) {
+#' @title Calculate Jensen-Shannon divergence for each data point
+#' @description Function to calculate Jensen-Shannon divergence for each data
+#' point.
+#' @param params_x Parameters for the first Gaussian distribution.
+#' @param params_y Parameters for the second Gaussian distribution.
+#' @param thresh_max Maximum threshold value across all locations.
+#' @param data_max Maximum data value.
+#' @param n_dat Number of data points to use in the Jensen-Shannon divergence.
+#' return The Jensen-Shannon divergence for each data point.
+#' @keywords internal
+js_div <- \(
+  params_x, 
+  params_y, 
+  thresh_max, 
+  data_max = 2 * thresh_max, 
+  n_dat = 10
+) {
   
   # test that input vectors have correct conditional extremes parameters
   stopifnot(is.vector(params_x) && is.vector(params_y))
@@ -151,5 +196,3 @@ js_div <- \(params_x, params_y, thresh_max, data_max = 2 * thresh_max, n_dat) {
     mu1 = mus[[1]], mu2 = mus[[2]], var1 = vars[[1]], var2 = vars[[2]]
   )))
 }
-
-
