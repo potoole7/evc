@@ -2,3 +2,4 @@
 
 export(fit_ce)
 export(js_clust)
+export(kl_sim_eval)

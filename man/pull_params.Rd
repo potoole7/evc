@@ -13,7 +13,7 @@ pull_params(dep)
 List of named vectors containing the parameters for each location.
 }
 \description{
-Function to pull the parameters (a, b, m and s) for the conditional
-extremes model
+Function to pull the parameters (a, b, m and s) for the
+conditional extremes model.
 }
 \keyword{internal}
