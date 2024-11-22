@@ -17,7 +17,7 @@ emp_kl_div(x, y, prob = 0.9)
 KL divergence between x and y.
 }
 \description{
-Functions to calculate empirical KL divergence between two locations using
-the Vignotto 2021 method.
+Functions to calculate empirical KL divergence between two
+locations using the Vignotto 2021 method.
 }
 \keyword{internal}
