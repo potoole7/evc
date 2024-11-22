@@ -1,6 +1,58 @@
+# TODO: Generate beyond wind speed and rain
+#' @title PAM clustering based on empirical KL divergence
+#' @description Perform clustering based on empirical KL divergence between
+#' bivariate extremes for two locations.
+#' @param data Data matrix with rows representing locations and columns
+#' @param kl_prob Extremal quantile to use.
+#' @param k Number of clusters.
+#' @param cluster_mem Optional true cluster membership to calculate adjusted
+#' Rand index.
+#' @param ... Additional arguments to pass to `proxy::dist`.
+#' @return List with clustering solution and adjusted Rand index if cluster_mem
+#' is provided.
+#' @rdname kl_sim_eval
+#' @export
+# Function to calculate KL divergence for 2 cluster simulation dataset
+kl_sim_eval <- \(
+  data, 
+  kl_prob,  
+  k = 2,   
+  cluster_mem = NULL, 
+  ...
+) {
+  
+  # prob must be valid probability
+  stopifnot(0 <= kl_prob && kl_prob <= 1)
+  
+  # KL divergence between areas using Vignotto 2021 method
+  kl_mat <- proxy::dist(
+    data, method = emp_kl_div, print = FALSE, prob = kl_prob, ...
+  )
+  
+  # clustering solution
+  pam_kl_clust <- cluster::pam(kl_mat, k = k)
+  ret <- list("pam" = pam_kl_clust)
+  # evaluate quality
+  if (!is.null(cluster_mem)) {
+    adj_rand <- mclust::adjustedRandIndex(
+      pam_kl_clust$clustering, 
+      cluster_mem
+    )  
+    ret <- c(ret, list("adj_rand" = adj_rand))
+  }
+  return(ret)
+}
+
+#' @title Empirical KL divergence between two locations
+#' @description Functions to calculate empirical KL divergence between two 
+#' locations using the Vignotto 2021 method.
+#' @param x Vector of data representing location 1
+#' @param y Vector of data representing location 2
+#' @param prob Extremal quantile to use.
+#' @return KL divergence between x and y.
+#' @keywords internal
 # function to calculate KL divergence between any two locations
 emp_kl_div <- \(x, y, prob = 0.9) {
-  # stopifnot(length(x) == length(y))
   
   # split x and y in half (rain vs wind speed)
   # remove NAs from x and y from padding matrix
@@ -56,48 +108,16 @@ emp_kl_div <- \(x, y, prob = 0.9) {
     sum_vals[i] <- (x_part[[i]] - y_part[[i]]) * 
                       log(x_part[[i]] / y_part[[i]])
   }
-  # sum_vals[is.nan(sum_vals) | is.infinite(sum_vals)] <- 0
   if (any(is.nan(sum_vals) | is.infinite(sum_vals), na.rm = TRUE)) return(NA)
   return((1  / 2) * sum(sum_vals))
 }
 
 
-# Function to calculate KL divergence for 2 cluster simulation dataset
-kl_sim_eval <- \(
-  data_mix, # Mixture data from copulas
-  kl_prob,  # Extremal quantile
-  k = 2,    # number of clusters
-  cluster_mem = NULL, # known cluster membership, for ARI
-  ...
-) {
-  
-  # prob must be valid probability
-  stopifnot(0 <= kl_prob && kl_prob <= 1)
-  
-  # KL divergence between areas using Vignotto 2021 method
-  kl_mat <- proxy::dist(
-    data_mix, method = emp_kl_div, print = FALSE, prob = kl_prob, ...
-  )
-  
-  # clustering solution
-  pam_kl_clust <- cluster::pam(kl_mat, k = k)
-  ret <- list("pam" = pam_kl_clust)
-  # evaluate quality
-  if (!is.null(cluster_mem)) {
-    adj_rand <- mclust::adjustedRandIndex(
-      pam_kl_clust$clustering, 
-      cluster_mem
-    )  
-    # print(paste0("adjusted Rand index" = adj_rand))
-    ret <- c(ret, list("adj_rand" = adj_rand))
-  }
-  return(ret)
-}
-
-
-# function to convert to Pareto scale
-# divide by N + 1, not N (so do i / n + 1)
-# x: Vector representing e.g. rain
+#' @title Pareto transformation
+#' @description Function to convert a vector to Pareto scale.
+#' @param x Vector to convert.
+#' @return Vector in Pareto scale.
+#' @keywords internal
 pareto_trans <- \(x) {
   stopifnot(is.vector(x))
   
@@ -116,9 +136,14 @@ pareto_trans <- \(x) {
   return(1 / (1 - ecdf_vals_x_ord))
 }
 
-# function to compute bivariate risk function
-# x: list of vectors representing different 
-# fun: fun used to calculate "risk", defaults to max as easier to partition
+#' @title Bivariate risk function
+#' @description Function to calculate bivariate risk function from Vignotto
+#' 2021.
+#' @param x List of vectors representing different locations.
+#' @param fun Function to calculate "risk", defaults to max as easier to
+#' partition. Note that `sum` has not been implemented yet.
+#' @return Vector of risk values.
+#' @keywords internal
 risk_fun <- \(x, fun = max) {
   # test list
   stopifnot(is.list(x)) 
@@ -136,10 +161,14 @@ risk_fun <- \(x, fun = max) {
   return(risk_vec)
 }
 
-# Partition into 3 subsets, calculate empirical proportion in each
+#' @title Partition into 3 subsets
+#' @description Function to partition bivariate extremes into into 3 subsets
+#' based on the risk function from Vignotto 2021.
+#' @param x List of vectors representing different locations.
+#' @param prob Extremal quantile to use.
+#' @return List with counts of points in each subset. 
+#' @keywords internal
 # TODO: Only works for max risk fun, unsure how to do for sum...
-# TODO: Fix, obviously wrong since it doesn't identify times where both 
-# are high!
 partition_max <- \(x, prob, plot = FALSE) {
   
   # x must be a list of length 2 (rain and wind speed)
@@ -154,46 +183,35 @@ partition_max <- \(x, prob, plot = FALSE) {
   ) 
   
   # calculate quantile of risk function
-  qu <- quantile(df$R, prob = prob)[[1]]
+  qu <- stats::quantile(df$R, prob = prob)[[1]]
   
   # partition into 3 subsets
-  df <- df %>% 
-    mutate(extreme = case_when(
+  df <- df |> 
+    dplyr::mutate(extreme = dplyr::case_when(
       rain > qu & wind_speed > qu   ~ "both",
       rain > qu                     ~ "rain",
       wind_speed > qu               ~ "wind_speed",
       TRUE                          ~ NA
     ))
   
-  if (plot) {
-    df %>% 
-      ggplot() +
-      geom_point(aes(x = rain, y = wind_speed, colour = extreme)) + 
-      geom_vline(xintercept = qu, linetype = "dashed") + 
-      geom_hline(yintercept = qu, linetype = "dashed") + 
-      ggsci::scale_colour_nejm() + 
-      labs(y = "wind speed", title = paste0(
-        "Hazard subsets, q_u = ", round(qu, 3), " (prob = ", prob, ")"
-      )) + 
-      theme
-  }
-  
   # return list with points falling into each category
   return(list(
-      "rain"       = sum(df$extreme == "rain", na.rm = TRUE),
-      "wind_speed" = sum(df$extreme == "wind_speed", na.rm = TRUE),
-      "both"       = sum(df$extreme == "both", na.rm = TRUE)
-    )
-  )
+    "rain"       = sum(df$extreme == "rain", na.rm = TRUE),
+    "wind_speed" = sum(df$extreme == "wind_speed", na.rm = TRUE),
+    "both"       = sum(df$extreme == "both", na.rm = TRUE)
+  ))
 }
 
-# Function to calculate proportion 
+#' @title Calculate proportion of each subset
+#' @description Function to calculate proportion of each subset based on the
+#' number of points in each subset.
+#' @param x List with counts of points in each subset.
+#' @return List with proportions of points in each subset.
+#' @keywords internal
 calc_prop <- \(x) {
   stopifnot(is.list(x) & names(x) == c("rain", "wind_speed", "both"))
-  # denom <- length(unlist(x))
   denom <- sum(unlist(x))
   ret <- lapply(x, \(y) y / denom)
   names(ret) <- names(x)
   return(ret)
 }
-
