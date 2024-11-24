@@ -1,11 +1,13 @@
 # TODO: Generate beyond wind speed and rain
+# TODO: Change name, hard to remember and not very informative
 #' @title PAM clustering based on empirical KL divergence
 #' @description Perform clustering based on empirical KL divergence between
 #' bivariate extremes for two locations.
 #' @param data Data matrix with rows representing locations and columns
 #' @param kl_prob Extremal quantile to use.
-#' @param k Number of clusters, set to NULL to produce scree plot.
-#' @param kl_mat Distance matrix, set to NULL to calculate. 
+#' @param k Number of clusters, set to NULL to produce scree plot and return
+#' distance matrix.
+#' @param dist_mat Distance matrix, set to NULL to calculate.
 #' @param cluster_mem Optional true cluster membership to calculate adjusted
 #' Rand index.
 #' @param ... Additional arguments to pass to `proxy::dist`.
@@ -15,47 +17,49 @@
 #' @export
 # Function to calculate KL divergence for 2 cluster simulation dataset
 kl_sim_eval <- \(
-  data, 
-  kl_prob,  
-  k = NULL,   
-  kl_mat = NULL,
+  data,
+  kl_prob,
+  k = NULL,
+  dist_mat = NULL,
   cluster_mem = NULL,
   ...
 ) {
-  
+
   # stop if quantile misspecified before wasting time
   stopifnot(0 <= kl_prob && kl_prob <= 1)
-  
+
   # KL divergence between areas using Vignotto 2021 method
-  if (is.null(kl_mat)) {
-    kl_mat <- proxy::dist(
+  if (is.null(dist_mat)) {
+    dist_mat <- proxy::dist(
       data, method = emp_kl_div, prob = kl_prob, ...
     )
   }
-   
+
   # if k is NULL, assume we want to return scree plot
-  # TODO: Should this just be done in another function? 
+  # TODO: Should this just be done in another function?
   # Want to avoid having to calculate distance matrix twice!
   if (is.null(k)) {
-    return(list("kl_mat" = kl_mat, "total_within_ss" = scree_plot(kl_mat)))
+    return(list(
+      "dist_mat" = dist_mat, "total_within_ss" = scree_plot(dist_mat)
+    ))
   }
-  
+
   # clustering solution
-  pam_kl_clust <- cluster::pam(kl_mat, k = k)
+  pam_kl_clust <- cluster::pam(dist_mat, k = k)
   ret <- pam_kl_clust
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
-      pam_kl_clust$clustering, 
+      pam_kl_clust$clustering,
       cluster_mem
-    )  
-    ret <- list("pam_kl_clust" = ret, "adj_rand" = adj_rand)
+    )
+    ret <- list("pam" = ret, "adj_rand" = adj_rand)
   }
   return(ret)
 }
 
 #' @title Empirical KL divergence between two locations
-#' @description Functions to calculate empirical KL divergence between two 
+#' @description Functions to calculate empirical KL divergence between two
 #' locations using the Vignotto 2021 method.
 #' @param x Vector of data representing location 1
 #' @param y Vector of data representing location 2
@@ -64,7 +68,7 @@ kl_sim_eval <- \(
 #' @keywords internal
 # function to calculate KL divergence between any two locations
 emp_kl_div <- \(x, y, prob = 0.9) {
-  
+
   # split x and y in half (rain vs wind speed)
   # remove NAs from x and y from padding matrix
   x <- x[!is.na(x)]
@@ -84,35 +88,35 @@ emp_kl_div <- \(x, y, prob = 0.9) {
     "wind_speed" = y[((m / 2) + 1):m]
     )
   )
-  
+
   # convert to Pareto scale
   df_lst_par <- df_lst
   df_lst_par <- lapply(df_lst, \(z) {
     data.frame(apply(z, 2, pareto_trans))
   })
-  
+
   # partition into 3 subsets
   df_part <- lapply(df_lst_par, \(z) {
     partition_max(list(z[, 1], z[, 2]), prob = prob)
   })
-  
+
   # fail if there are any 0s
   stopifnot(
     "No set can contain zeros, reduce `prob`" = all(unlist(df_part) != 0)
   )
-  
+
   # calculate proportions of partitions
   df_part_prop <- lapply(df_part, \(z) {
     denom <- sum(unlist(z)) # denominator is # extreme obs
     lapply(z, `/`, denom) # find prop of extreme obs for each disjoint set
   })
-  
+
   # calculate proportions of partitions
   x_part <- df_part_prop[[1]]
   y_part <- df_part_prop[[2]]
   sum_vals <- vector(length = length(x_part))
-  for (i in seq_along(sum_vals)) { 
-    sum_vals[i] <- (x_part[[i]] - y_part[[i]]) * 
+  for (i in seq_along(sum_vals)) {
+    sum_vals[i] <- (x_part[[i]] - y_part[[i]]) *
                       log(x_part[[i]] / y_part[[i]])
   }
   if (any(is.nan(sum_vals) | is.infinite(sum_vals), na.rm = TRUE)) return(NA)
@@ -127,19 +131,19 @@ emp_kl_div <- \(x, y, prob = 0.9) {
 #' @keywords internal
 pareto_trans <- \(x) {
   stopifnot(is.vector(x))
-  
+
   # order and sort data
   x_ord <- order(x)
   x_sort <- x[x_ord]
-  
+
   # calculate ECDF
   n <- length(x)
   ecdf_vals <- (seq_len(n)) / (n + 1)
   # convert back to original order
   ecdf_vals_x_ord <- numeric(n)
   ecdf_vals_x_ord[x_ord] <- ecdf_vals
-  
-  # pareto transform 
+
+  # pareto transform
   return(1 / (1 - ecdf_vals_x_ord))
 }
 
@@ -153,13 +157,13 @@ pareto_trans <- \(x) {
 #' @keywords internal
 risk_fun <- \(x, fun = max) {
   # test list
-  stopifnot(is.list(x)) 
+  stopifnot(is.list(x))
   # test equal length
-  stopifnot(length(unique(vapply(x, length, numeric(1)))) == 1) 
-  
+  stopifnot(length(unique(vapply(x, length, numeric(1)))) == 1)
+
   # TODO: Improve/speedup (could have x as a dataframe!)
   risk_vec <- vector(length = length(x[[1]]))
-  for (i in seq_along(x[[1]])) {  
+  for (i in seq_along(x[[1]])) {
     risk_vec[[i]] <- fun(
       # pull ith entry in each vector in the list x
       vapply(x, `[[`, i, FUN.VALUE = numeric(1))
@@ -173,34 +177,34 @@ risk_fun <- \(x, fun = max) {
 #' based on the risk function from Vignotto 2021.
 #' @param x List of vectors representing different locations.
 #' @param prob Extremal quantile to use.
-#' @return List with counts of points in each subset. 
+#' @return List with counts of points in each subset.
 #' @keywords internal
 # TODO: Only works for max risk fun, unsure how to do for sum...
 partition_max <- \(x, prob, plot = FALSE) {
-  
+
   # x must be a list of length 2 (rain and wind speed)
-  stopifnot(is.list(x) && length(x) == 2) 
-  
+  stopifnot(is.list(x) && length(x) == 2)
+
   # convert to dataframe, easier to subset (must follow this order!)
   df <- data.frame(
-    rain       = x[[1]], 
+    rain       = x[[1]],
     wind_speed = x[[2]], # TODO: Make x a dataframe already
     # TODO: Fix this, wrong somehow!!!
     R          = risk_fun(x, max)
-  ) 
-  
+  )
+
   # calculate quantile of risk function
   qu <- stats::quantile(df$R, prob = prob)[[1]]
-  
+
   # partition into 3 subsets
-  df <- df |> 
+  df <- df |>
     dplyr::mutate(extreme = dplyr::case_when(
       rain > qu & wind_speed > qu   ~ "both",
       rain > qu                     ~ "rain",
       wind_speed > qu               ~ "wind_speed",
       TRUE                          ~ NA
     ))
-  
+
   # return list with points falling into each category
   return(list(
     "rain"       = sum(df$extreme == "rain", na.rm = TRUE),

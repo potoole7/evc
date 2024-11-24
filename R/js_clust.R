@@ -1,11 +1,13 @@
-# Function to calculate and cluster on the Jensen-Shannon Divergence for 
+# Function to calculate and cluster on the Jensen-Shannon Divergence for
 # the conditional extremes model
 #' @title Cluster based on Jensen-Shannon divergence for conditional extremes
 #' model
 #' @description Function to calculate and cluster on the Jensen-Shannon
 #' Divergence for the conditional extremes model.
 #' @param dependence List of `mexDependence` objects for each location.
-#' @param nclust Number of clusters to fit.
+#' @param k Number of clusters to fit, set to NULL to produce scree plot and
+#' return distance matrix.
+#' @param dist_mat Distance matrix, set to NULL to calculate.
 #' @param cluster_mem Optional known cluster memberships for each location,
 #' which can be used to evaluate the quality of the clustering.
 #' @param dat_max_mult Multiplier for the maximum multiple of the largest
@@ -19,58 +21,78 @@
 # TODO: Document how pam is also used here
 js_clust <- \(
   dependence,
-  nclust = 3,
+  k = NULL,
+  dist_mat = NULL,
   cluster_mem = NULL,
   dat_max_mult = 2,
   n_dat = 10
 ) {
-  
+
   # TODO: Add stopifnot clause for class of dependence
-   
+
   # pull parameter values for each location
-  params <- lapply(dependence, pull_params)
+  if (is.null(dist_mat)) {
+    params <- lapply(dependence, pull_params)
+
+    # pull Laplace threshold values for each location
+    # TODO: Problem, last threshold different to others, investigate
+    thresh <- lapply(dependence, pull_thresh_trans)
+
+    # take maximum Laplace thresholds; want to geenra
+    thresh_max <- lapply(dplyr::bind_rows(thresh), max)
+
+    # list of locs containing vars -> list of vars, each containing all locs
+    params <- purrr::transpose(params)
+
+    dist_mats <- lapply(seq_along(params), \(i) {
+      proxy::dist(
+        params[[i]],
+        method = js_div,
+        thresh_max = thresh_max[[i]],
+        data_max = dat_max_mult * thresh_max[[i]],
+        n_dat = n_dat
+      )
+    })
+
+    # sum distance matrices over different variables together
+    dist_mat <- do.call(`+`, dist_mats)
+  }
   
-  # pull Laplace threshold values for each location
-  # TODO: Problem, last threshold different to others, investigate
-  thresh <- lapply(dependence, pull_thresh_trans)
-  
-  # take maximum Laplace thresholds; want to geenra
-  thresh_max <- lapply(dplyr::bind_rows(thresh), max)
-  
-  # list of locs -> list of len 2 of variables, each containing all locs
-  params <- purrr::transpose(params)
-  
-  dist_mats <- lapply(seq_along(params), \(i) {
-    proxy::dist(
-      params[[i]], 
-      method = js_div, 
-      thresh_max = thresh_max[[i]], 
-      data_max = dat_max_mult * thresh_max[[i]], 
-      n_dat = n_dat
-    )
-  })
-  
-  # sum distance matrices over different variables together
-  dist_mat <- do.call(`+`, dist_mats)
+  if (is.null(k)) {
+    return(list("dist_mat" = dist_mat, "total_within_ss" = scree_plot(dist_mat)))
+  }
 
   # cluster for rain and wind speed using PAM
-  pam_js_clust <- cluster::pam(dist_mat, k = nclust)
+  # TODO: functionalise this, exact same as in kl_sim_eval!
+  pam_js_clust <- cluster::pam(dist_mat, k = k)
   ret <- list("pam" = pam_js_clust)
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
-      pam_js_clust$clustering, 
+      pam_js_clust$clustering,
       cluster_mem
     )
     ret <- c(ret, list("adj_rand" = adj_rand))
   }
-  
+
   return(ret)
+  
+  pam_js_clust <- cluster::pam(dist_mat, k = k)
+  ret <- pam_js_clust
+  # evaluate quality
+  if (!is.null(cluster_mem)) {
+    adj_rand <- mclust::adjustedRandIndex(
+      pam_js_clust$clustering,
+      cluster_mem
+    )
+    ret <- list("pam" = ret, "adj_rand" = adj_rand)
+  }
+  return(ret) 
 }
 
 
 #' @title Pull parameters for conditional extremes model
-#' @description Function to pull the parameters (a, b, m and s) for the 
+#' @description Function to pull the parameters (a, b, m and s) for the
 #' conditional extremes model.
 #' @param dep List of `mexDependence` objects for each location.
 #' @return List of named vectors containing the parameters for each location.
@@ -86,7 +108,7 @@ pull_params <- \(dep) {
     # remove c and d if 0 (i.e. Laplace margins, rather than Gumbel)
     if (ret["c"] == 0 && ret["d"] == 0) {
       ret <- ret[!names(ret) %in% c("c", "d")]
-    } 
+    }
     return(ret)
   }))
 }
@@ -127,7 +149,7 @@ kl_gauss <- \(mu1, mu2, var1, var2) {
 #' @title Calculate Jensen-Shannon divergence between two Gaussian distributions
 #' @description Function to calculate the Jensen-Shannon divergence between two
 #' Gaussian distributions, using the Kullback-Leibler divergence between them.
-#' This metric is symmetric, as required for clustering. 
+#' This metric is symmetric, as required for clustering.
 #' @param mu1 Mean of the first Gaussian distribution.
 #' @param mu2 Mean of the second Gaussian distribution.
 #' @param var1 Variance of the first Gaussian distribution.
@@ -160,22 +182,22 @@ js_gauss <- \(mu1, mu2, var1, var2) {
 #' return The Jensen-Shannon divergence for each data point.
 #' @keywords internal
 js_div <- \(
-  params_x, 
-  params_y, 
-  thresh_max, 
-  data_max = 2 * thresh_max, 
+  params_x,
+  params_y,
+  thresh_max,
+  data_max = 2 * thresh_max,
   n_dat = 10
 ) {
-  
+
   # test that input vectors have correct conditional extremes parameters
   stopifnot(is.vector(params_x) && is.vector(params_y))
   stopifnot(
     all(c(names(params_x), names(params_y)) == rep(c("a", "b", "m", "s"), 2))
   )
-  
+
   # create data sequence from specified arguments
   data <- seq(thresh_max, data_max, length = n_dat)
-  
+
   # funs to calculate mu and sd for normal dist as in 5.2 of Heff & Tawn '04
   mu_fun <- \(x, data) {
     return(x[["a"]] * data + x[["m"]] * (data ^ x[["b"]]))
@@ -184,11 +206,11 @@ js_div <- \(
     # take square now to avoid in kl_single formula
     return((x[["s"]] * (data ^ x[["b"]]))^2)
   }
-  
+
   # calculate mu and sigma for each data point
   mus <- lapply(list(params_x, params_y), mu_fun, data = data)
   vars <- lapply(list(params_x, params_y), var_fun, data = data)
-  
+
   # Calculate Jensen-Shannon divergence for each data point
   # TODO: How best to summarise across all data points? Sum? Average?
   return(sum(mapply(
