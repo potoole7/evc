@@ -9,7 +9,9 @@
 #' @param data List of dataframes at each location containing data for each
 #' variable.
 #' @param vars Variable names for each location.
-#' @param marg_prob Marginal quantile for thresholding.
+#' @param marg_prob Can be a list of arguments to `quantile_thresh` if a 
+#' variable quantile is desired, or a numeric value for simple quantile 
+#' thresholding.
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
 #' @param split_data if `data` has variables stacked, unstack.
@@ -19,7 +21,11 @@
 fit_ce <- \(
   data,
   vars = c("rain", "wind_speed"),
-  marg_prob = 0.9,
+  marg_prob = list(
+    f        = list("response ~ name", "~ name"), # must be as character
+    tau      = .95, 
+    jitter   = TRUE
+  ),
   cond_prob = 0.9,
   f = list(excess ~ name, ~ 1), # keep shape constant for now
   split_data = TRUE
@@ -27,7 +33,19 @@ fit_ce <- \(
 
   # initialise to remove `devtools::check()` note
   name <- excess <- shape <- NULL
-
+  
+  # if marg_prob used as args to `quantile_thresh`, check args correct
+  if (is.list(marg_prob)) {
+    stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
+    stopifnot(is.list(marg_prob$f))
+    if (!all(vapply(marg_prob$f, is.character, logical(1)))) {
+      stop(paste(
+        "f should be a list of characters where 'response' is replaced by",
+        "each specified 'vars'" 
+      ))
+    }
+  }
+  
   # convert to dataframe
   # TODO: Tidy up, quite verbose
   # TODO: Need to extend to multiple variables, using length of vars
@@ -49,19 +67,42 @@ fit_ce <- \(
   }
 
   # First, calculate threshold (90th quantile across all locations)
-  thresh <- apply(data_df[, c(vars)], 2, stats::quantile, marg_prob)
+  if (!is.list(marg_prob) && is.numeric(marg_prob)) {
+    thresh <- apply(data_df[, c(vars)], 2, stats::quantile, marg_prob)
+    # for each variable, calculate excess over threshold
+    data_thresh <- lapply(vars, \(x) {
+      data_df |>
+        dplyr::select(dplyr::matches(x), name) |>
+        dplyr::mutate(
+          thresh = thresh[x],
+          excess = !!rlang::sym(x) - thresh
+        ) |>
+        dplyr::filter(excess > 0)
+    })
+  # If thresh is a list, assume it is arguments to quantile_thresh
+  } else if (is.list(marg_prob)) {
+    # TODO: Redo with do.call
+    data_thresh <- lapply(vars, \(x) {
+      # Change formula to include response in question
+      marg_prob$f <- lapply(marg_prob$f, \(f_spec) {
+        stats::formula(stringr::str_replace_all(f_spec, "response", x))
+      })
+      # Run `quantile_thresh` for each response with specified args 
+      do.call(
+        quantile_thresh, 
+        # data args
+        args = c(list(
+          data     = dplyr::select(data_df, dplyr::matches(x), name), 
+          response = x
+        ), 
+        marg_prob
+        )
+      )
+    })
+  } else {
+    stop("marg_prob must be numeric or arguments to `quantile_thresh`")
+  }
   
-  # for each variable, calculate excess over threshold
-  data_thresh <- lapply(vars, \(x) {
-    data_df |>
-      dplyr::select(dplyr::matches(x), name) |>
-      dplyr::mutate(
-        thresh = thresh[x],
-        excess = !!rlang::sym(x) - thresh
-      ) |>
-      dplyr::filter(excess > 0)
-  })
-
   # Now fit evgam model for each marginal
   # TODO: Is just fitting different models by loc appropriate? (Yes I think!)
   # TODO: Allow use of base `texmex` as well!

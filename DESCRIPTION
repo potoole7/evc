@@ -16,6 +16,7 @@ Imports:
   texmex,
   rlang,
   purrr,
+  stringr,
   mclust,
   cluster,
   proxy,
