@@ -35,4 +35,3 @@ Dataframe with \code{thresh} and \code{excess} columns, optionally thresholded.
 Fit varying threshold using quantile regression, as in
 https://empslocal.ex.ac.uk/people/staff/by223/software/gpd.R.
 }
-\keyword{internal}

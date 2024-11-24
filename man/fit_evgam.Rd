@@ -23,4 +23,3 @@ List with model \code{m} and predictions \code{predictions}.
 \description{
 Fit and generate predictions from \code{evgam} model
 }
-\keyword{internal}

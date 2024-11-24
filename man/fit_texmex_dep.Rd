@@ -28,4 +28,3 @@ List of \code{mexDependence} objects for each site.
 \description{
 Fit \code{texmex} dependence model for each site.
 }
-\keyword{internal}

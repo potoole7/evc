@@ -20,4 +20,3 @@ List of \code{migpd} objects for each location.
 Generate marginal \code{migpd} objects from \code{evgam} objects for each
 site.
 }
-\keyword{internal}

@@ -165,7 +165,8 @@ quantile_thresh <- function(
 #' @param pred_data Dataframe for one location to predict on.
 #' @param f Formula for `evgam` model.
 #' @return List with model `m` and predictions `predictions`.
-#' @keywords internal
+#' @rdname fit_evgam
+#' @export
 fit_evgam <- \(
   data,
   pred_data,
@@ -195,7 +196,8 @@ fit_evgam <- \(
 #' @param data Data for each location.
 #' @param mqu Marginal quantile for thresholding.
 #' @return List of `migpd` objects for each location.
-#' @keywords internal
+#' @rdname gen_marg_migpd
+#' @export
 gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
 
   name <- rain <- wind_speed <- NULL
@@ -245,7 +247,8 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' (see \link[texmex]{mexDependence} for details).
 #' @return List of `mexDependence` objects for each site.
-#' @keywords internal
+#' @rdname fit_texmex_dep
+#' @export
 fit_texmex_dep <- \(
   marginal,
   vars = c("rain", "wind_speed"),
