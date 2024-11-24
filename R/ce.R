@@ -114,7 +114,8 @@ fit_ce <- \(
 #' @param jitter Add jitter to data to remove 0s.
 #' @param thresh return thresholded (i.e. filtered) data if TRUE.
 #' @return Dataframe with `thresh` and `excess` columns, optionally thresholded.
-#' @keywords internal
+#' @rdname quantile_thresh
+#' @export
 # TODO: Vary tau and see how that effects results (QQ plots, etc)
 quantile_thresh <- function(
   data, 
