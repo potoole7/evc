@@ -49,9 +49,8 @@ fit_ce <- \(
   }
 
   # First, calculate threshold (90th quantile across all locations)
-  # TODO: Allow use of `quantile_thresh` here
-  thresh <- apply(data_df[, 1:2], 2, stats::quantile, marg_prob)
-
+  thresh <- apply(data_df[, c(vars)], 2, stats::quantile, marg_prob)
+  
   # for each variable, calculate excess over threshold
   data_thresh <- lapply(vars, \(x) {
     data_df |>
