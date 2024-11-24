@@ -15,7 +15,8 @@
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
 #' @param split_data if `data` has variables stacked, unstack.
-#' @param output_marg Logical argument for whether to return marginal fits.
+#' @param output_all Logical argument for whether to return quantiles, `evgam`
+#' and marginal fits.
 #' @return Object of type `mexDependence` for each location.
 #' @rdname fit_ce
 #' @export
@@ -30,7 +31,7 @@ fit_ce <- \(
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
   split_data  = TRUE, 
-  output_marg = FALSE
+  output_all = FALSE
 ) {
 
   # initialise to remove `devtools::check()` note
@@ -136,15 +137,20 @@ fit_ce <- \(
   marginal <- gen_marg_migpd(data_gpd, data_df)
   names(marginal) <- paste0(data_gpd$name, " - ", data_gpd$county)
 
-  # Calculate dependence from marginals
+  # Calculate dependence from marginals (default output object)
   ret <- fit_texmex_dep(
     marginal,
     mex_dep_args = list(dqu = cond_prob),
     fit_no_keef = TRUE
   )
-  # also output marginal fits, if desired
-  if (output_marg) {
-    ret <- list("marginal" = marginal, "dependence" = ret)
+  # output more than just dependence object, if desired
+  if (output_all) {
+    ret <- list(
+      "thresh"   = data_thresh,
+      "evgam"    = evgam_fit,
+      "marginal" = marginal,
+      "dependence" = ret
+    )
   }
   return(ret)
 }

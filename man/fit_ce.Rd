@@ -11,7 +11,7 @@ fit_ce(
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
   split_data = TRUE,
-  output_marg = FALSE
+  output_all = FALSE
 )
 }
 \arguments{
@@ -30,7 +30,8 @@ thresholding.}
 
 \item{split_data}{if \code{data} has variables stacked, unstack.}
 
-\item{output_marg}{Logical argument for whether to return marginal fits.}
+\item{output_all}{Logical argument for whether to return quantiles, \code{evgam}
+and marginal fits.}
 }
 \value{
 Object of type \code{mexDependence} for each location.
