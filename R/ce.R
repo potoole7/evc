@@ -161,18 +161,12 @@ fit_ce <- \(
     ) |>
     # must have unique rows to loop through in `gen_marg_migpd`
     # TODO: Still forces us to have name column, change in gen_marg_migpd?
-    dplyr::distinct(name, dplyr::across(c(
-      !!preds,
-      dplyr::contains("scale"),
-      dplyr::contains("shape"),
-      dplyr::contains("thresh"),
-      dplyr::contains("n_")))
-    )
-
+    distinct(name, .keep_all = TRUE)
+    
   # Now convert marginals to migpd (i.e. texmex format)
   # TODO: Working, but summary/coef doesn't show new thresholds (needed?)
   marginal <- gen_marg_migpd(data_gpd, data_df)
-  names(marginal) <- paste0(data_gpd$name, " - ", data_gpd$county)
+  names(marginal) <- data_gpd$name # TODO: Change
 
   # Calculate dependence from marginals (default output object)
   ret <- fit_texmex_dep(
