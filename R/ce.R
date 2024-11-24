@@ -9,8 +9,8 @@
 #' @param data List of dataframes at each location containing data for each
 #' variable.
 #' @param vars Variable names for each location.
-#' @param marg_prob Can be a list of arguments to `quantile_thresh` if a 
-#' variable quantile is desired, or a numeric value for simple quantile 
+#' @param marg_prob Can be a list of arguments to `quantile_thresh` if a
+#' variable quantile is desired, or a numeric value for simple quantile
 #' thresholding.
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
@@ -25,18 +25,18 @@ fit_ce <- \(
   vars = c("rain", "wind_speed"),
   marg_prob = list(
     f        = list("response ~ name", "~ name"), # must be as character
-    tau      = .95, 
+    tau      = .95,
     jitter   = TRUE
   ),
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
-  split_data  = TRUE, 
+  split_data  = TRUE,
   output_all = FALSE
 ) {
 
   # initialise to remove `devtools::check()` note
-  name <- excess <- shape <- NULL
-  
+  name <- excess <- shape <- n <- NULL
+
   # if marg_prob used as args to `quantile_thresh`, check args correct
   if (is.list(marg_prob)) {
     stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
@@ -44,30 +44,35 @@ fit_ce <- \(
     if (!all(vapply(marg_prob$f, is.character, logical(1)))) {
       stop(paste(
         "f should be a list of characters where 'response' is replaced by",
-        "each specified 'vars'" 
+        "each specified 'vars'"
       ))
     }
   }
-  
+
+  # TODO: Should really be done outside of this function, shouldn't be here!
   # convert to dataframe
   # TODO: Tidy up, quite verbose
   # TODO: Need to extend to multiple variables, using length of vars
-  if (split_data) {
+  if (!is.data.frame(data) && split_data) {
     data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
       n <- length(data[[i]])
-      data.frame(
+      ret <- data.frame(
         "rain"       = data[[i]][1:(n / 2)],
         "wind_speed" = data[[i]][((n / 2) + 1):n]
       ) |>
         dplyr::mutate(name = paste0("location_", i))
     }))
-  } else {
+  } else if (!is.data.frame(data)) {
     data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
       as.data.frame(data[[i]]) |>
         dplyr::mutate(name = paste0("location_", i))
     }))
     names(data_df)[1:2] <- c("rain", "wind_speed") # TODO: Change to var_j
+  } else {
+    data_df <- data
   }
+
+  # add row number for labelling
 
   # First, calculate threshold (90th quantile across all locations)
   if (!is.list(marg_prob) && is.numeric(marg_prob)) {
@@ -75,7 +80,9 @@ fit_ce <- \(
     # for each variable, calculate excess over threshold
     data_thresh <- lapply(vars, \(x) {
       data_df |>
-        dplyr::select(dplyr::matches(x), name) |>
+        # dplyr::select(dplyr::matches(x), name) |>
+        # remote other responses, will be joined together after
+        dplyr::select(-dplyr::matches(vars[vars != x])) |>
         dplyr::mutate(
           thresh = thresh[x],
           excess = !!rlang::sym(x) - thresh
@@ -90,14 +97,11 @@ fit_ce <- \(
       marg_prob$f <- lapply(marg_prob$f, \(f_spec) {
         stats::formula(stringr::str_replace_all(f_spec, "response", x))
       })
-      # Run `quantile_thresh` for each response with specified args 
+      # Run `quantile_thresh` for each response with specified args
       do.call(
-        quantile_thresh, 
+        quantile_thresh,
         # data args
-        args = c(list(
-          data     = dplyr::select(data_df, dplyr::matches(x), name), 
-          response = x
-        ), 
+        args = c(list(data = data_df, response = x),
         marg_prob
         )
       )
@@ -105,35 +109,68 @@ fit_ce <- \(
   } else {
     stop("marg_prob must be numeric or arguments to `quantile_thresh`")
   }
-  
-  # Now fit evgam model for each marginal
-  # TODO: Is just fitting different models by loc appropriate? (Yes I think!)
-  # TODO: Allow use of base `texmex` as well!
 
+  # Now fit evgam model for each marginal
+  # TODO: Allow use of base `texmex` (i.e. migpd instead of evgam) as well!
   evgam_fit <- lapply(data_thresh, \(x) {
     fit_evgam(
       data = x,
-      pred_data = x,
-      # model scale and shape for each location
-      f = f
+      pred_data = data_df,
+      f = f # formula to use in evgam::evgam, specified arg above
     )
   })
 
   # Join scale and shape estimates into data
-  # TODO: Functionalise to work with > 2 variables
-  data_gpd <- dplyr::distinct(data_df, name) |>
+  # TODO: Functionalise to work with > 2 variables and for different names
+  # pull variables specified as predictors in f
+  preds <- unique(as.vector(unlist(lapply(
+    evgam_fit, \(x) x$m$predictor.names
+  ))))
+  # TODO: Recursively perform this action
+  # TODO: Change pipe function
+  data_gpd <- data_df |>
+    # add scale and shape parameters for each location
     dplyr::bind_cols(
       dplyr::rename(
-        dplyr::distinct(evgam_fit[[1]]$predictions),
+        evgam_fit[[1]]$predictions,
         scale_rain = scale,
         shape_rain = shape),
       dplyr::rename(
-        dplyr::distinct(evgam_fit[[2]]$predictions),
+        evgam_fit[[2]]$predictions,
         scale_ws = scale,
         shape_ws = shape),
+    ) |>
+    # add thresholds and number of exceedances for each predictor combo
+    dplyr::left_join(
+      data_thresh[[1]] |>
+        dplyr::mutate(thresh = round(thresh, 3)) |>
+        dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
+        dplyr::rename(n_rain = n, thresh_rain = thresh),
+      by = preds
+    ) |>
+    dplyr::left_join(
+      data_thresh[[2]] |>
+        dplyr::mutate(thresh = round(thresh, 3)) |>
+        dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
+        dplyr::rename(n_wind = n, thresh_wind = thresh),
+      by = preds
+    ) |>
+    # fill in NAs (indicating no exceedances) with 0
+    dplyr::mutate(
+      dplyr::across(dplyr::contains("n_"), \(x) ifelse(is.na(x), 0, x))
+    ) |>
+    # must have unique rows to loop through in `gen_marg_migpd`
+    # TODO: Still forces us to have name column, change in gen_marg_migpd?
+    dplyr::distinct(name, dplyr::across(c(
+      !!preds,
+      dplyr::contains("scale"),
+      dplyr::contains("shape"),
+      dplyr::contains("thresh"),
+      dplyr::contains("n_")))
     )
 
   # Now convert marginals to migpd (i.e. texmex format)
+  # TODO: Working, but summary/coef doesn't show new thresholds (needed?)
   marginal <- gen_marg_migpd(data_gpd, data_df)
   names(marginal) <- paste0(data_gpd$name, " - ", data_gpd$county)
 
@@ -255,6 +292,7 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
   name <- rain <- wind_speed <- NULL
 
   # Create "dummy" migpd object to fill in with evgam values
+  # TODO: Extend to > 2 variables
   dat_mat <- data |>
     dplyr::filter(name == data$name[[1]]) |>
     dplyr::select(rain, wind_speed) |>
@@ -274,6 +312,7 @@ gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
       as.matrix()
     names(spec_marg$data) <- c("rain", "wind_speed")
     # replace thresholds
+    # TODO: Fix, thresholds not included in above
     spec_marg$models$rain$threshold <- data_gpd$thresh_rain[[i]]
     spec_marg$models$wind_speed$threshold <- data_gpd$thresh_wind[[i]]
     # replace coefficients
