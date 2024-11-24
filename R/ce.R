@@ -15,6 +15,7 @@
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
 #' @param split_data if `data` has variables stacked, unstack.
+#' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' @param output_all Logical argument for whether to return quantiles, `evgam`
 #' and marginal fits.
 #' @return Object of type `mexDependence` for each location.
@@ -24,14 +25,15 @@ fit_ce <- \(
   data,
   vars = c("rain", "wind_speed"),
   marg_prob = list(
-    f        = list("response ~ name", "~ name"), # must be as character
-    tau      = .95,
-    jitter   = TRUE
+    f      = list("response ~ name", "~ name"), # must be as character
+    tau    = .95,
+    jitter = TRUE
   ),
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
   split_data  = TRUE,
-  output_all = FALSE
+  fit_no_keef = FALSE,
+  output_all  = FALSE
 ) {
 
   # initialise to remove `devtools::check()` note
@@ -172,7 +174,7 @@ fit_ce <- \(
   ret <- fit_texmex_dep(
     marginal,
     mex_dep_args = list(dqu = cond_prob),
-    fit_no_keef = TRUE
+    fit_no_keef = fit_no_keef
   )
   # output more than just dependence object, if desired
   if (output_all) {
