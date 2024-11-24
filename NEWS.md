@@ -1,3 +1,7 @@
+# evc 0.1.6
+
+- `marg_prob` argument to `fit_ce` can now also be arguments (other than data and response) to `evgam::evgam` , as well as numeric quantile to threshold at.
+
 # evc 0.1.5
 
 - Add utility and plotting functions often used in conjunction with this package.
