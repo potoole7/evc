@@ -1,6 +1,5 @@
 #### Functions for fitting Conditional Extremes model ####
 
-# TODO: Document functions
 # TODO: Extend to more than 2 variables
 # TODO: Write tests for functions
 # TODO: Allow use of base `texmex` with `fit_ce`
