@@ -10,7 +10,8 @@ fit_ce(
   marg_prob = list(f = list("response ~ name", "~ name"), tau = 0.95, jitter = TRUE),
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
-  split_data = TRUE
+  split_data = TRUE,
+  output_marg = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ thresholding.}
 \item{f}{Formula for \code{evgam} model.}
 
 \item{split_data}{if \code{data} has variables stacked, unstack.}
+
+\item{output_marg}{Logical argument for whether to return marginal fits.}
 }
 \value{
 Object of type \code{mexDependence} for each location.
