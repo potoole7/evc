@@ -7,7 +7,7 @@
 fit_ce(
   data,
   vars = c("rain", "wind_speed"),
-  marg_prob = 0.9,
+  marg_prob = list(f = list("response ~ name", "~ name"), tau = 0.95, jitter = TRUE),
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
   split_data = TRUE
@@ -19,7 +19,9 @@ variable.}
 
 \item{vars}{Variable names for each location.}
 
-\item{marg_prob}{Marginal quantile for thresholding.}
+\item{marg_prob}{Can be a list of arguments to \code{quantile_thresh} if a
+variable quantile is desired, or a numeric value for simple quantile
+thresholding.}
 
 \item{cond_prob}{Conditional quantile for dependence modelling.}
 
