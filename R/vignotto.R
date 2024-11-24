@@ -4,7 +4,8 @@
 #' bivariate extremes for two locations.
 #' @param data Data matrix with rows representing locations and columns
 #' @param kl_prob Extremal quantile to use.
-#' @param k Number of clusters.
+#' @param k Number of clusters, set to NULL to produce scree plot.
+#' @param kl_mat Distance matrix, set to NULL to calculate. 
 #' @param cluster_mem Optional true cluster membership to calculate adjusted
 #' Rand index.
 #' @param ... Additional arguments to pass to `proxy::dist`.
@@ -16,29 +17,39 @@
 kl_sim_eval <- \(
   data, 
   kl_prob,  
-  k = 2,   
-  cluster_mem = NULL, 
+  k = NULL,   
+  kl_mat = NULL,
+  cluster_mem = NULL,
   ...
 ) {
   
-  # prob must be valid probability
+  # stop if quantile misspecified before wasting time
   stopifnot(0 <= kl_prob && kl_prob <= 1)
   
   # KL divergence between areas using Vignotto 2021 method
-  kl_mat <- proxy::dist(
-    data, method = emp_kl_div, prob = kl_prob, ...
-  )
+  if (is.null(kl_mat)) {
+    kl_mat <- proxy::dist(
+      data, method = emp_kl_div, prob = kl_prob, ...
+    )
+  }
+   
+  # if k is NULL, assume we want to return scree plot
+  # TODO: Should this just be done in another function? 
+  # Want to avoid having to calculate distance matrix twice!
+  if (is.null(k)) {
+    return(list("kl_mat" = kl_mat, "total_within_ss" = scree_plot(kl_mat)))
+  }
   
   # clustering solution
   pam_kl_clust <- cluster::pam(kl_mat, k = k)
-  ret <- list("pam" = pam_kl_clust)
+  ret <- pam_kl_clust
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
       pam_kl_clust$clustering, 
       cluster_mem
     )  
-    ret <- c(ret, list("adj_rand" = adj_rand))
+    ret <- list("pam_kl_clust" = ret, "adj_rand" = adj_rand)
   }
   return(ret)
 }

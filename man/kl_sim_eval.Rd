@@ -4,14 +4,16 @@
 \alias{kl_sim_eval}
 \title{PAM clustering based on empirical KL divergence}
 \usage{
-kl_sim_eval(data, kl_prob, k = 2, cluster_mem = NULL, ...)
+kl_sim_eval(data, kl_prob, k = NULL, kl_mat = NULL, cluster_mem = NULL, ...)
 }
 \arguments{
 \item{data}{Data matrix with rows representing locations and columns}
 
 \item{kl_prob}{Extremal quantile to use.}
 
-\item{k}{Number of clusters.}
+\item{k}{Number of clusters, set to NULL to produce scree plot.}
+
+\item{kl_mat}{Distance matrix, set to NULL to calculate.}
 
 \item{cluster_mem}{Optional true cluster membership to calculate adjusted
 Rand index.}
