@@ -26,7 +26,7 @@ kl_sim_eval <- \(
   
   # KL divergence between areas using Vignotto 2021 method
   kl_mat <- proxy::dist(
-    data, method = emp_kl_div, print = FALSE, prob = kl_prob, ...
+    data, method = emp_kl_div, prob = kl_prob, ...
   )
   
   # clustering solution
@@ -99,10 +99,6 @@ emp_kl_div <- \(x, y, prob = 0.9) {
   # calculate proportions of partitions
   x_part <- df_part_prop[[1]]
   y_part <- df_part_prop[[2]]
-  if (print) {
-    print(paste0("both for x: ", round(x_part$both, 3)))
-    print(paste0("both for y: ", round(y_part$both, 3)))
-  }
   sum_vals <- vector(length = length(x_part))
   for (i in seq_along(sum_vals)) { 
     sum_vals[i] <- (x_part[[i]] - y_part[[i]]) * 
