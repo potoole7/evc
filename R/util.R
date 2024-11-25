@@ -132,17 +132,16 @@ sil_boxplot <- function(
   return(ret)
 }
 
-
 #' @title Plot clustering solution on map
 #' @description Plot clustering solution on map
 #' @param pts Spatial points object
 #' @param areas Spatial polygons object
 #' @param clust_obj Clustering object
 #' @return ggplot object
-#' @rdname plt_clust
+#' @rdname plt_clust_map
 #' @export
 # TODO: Could make this plot/ggplot method for object
-plt_clust <- \(pts, areas, clust_obj) {
+plt_clust_map <- \(pts, areas, clust_obj) {
 
   clust <- mediod <- NULL
 
@@ -173,6 +172,47 @@ plt_clust <- \(pts, areas, clust_obj) {
     ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
     ggplot2::scale_size_continuous(range = c(3, 6)) +
     ggplot2::guides(shape = "none", size = "none") +
+    evc_theme()
+}
+
+#' @title Plot silhouette width on map
+#' @description Plot silhouette width for clustering solution on map.
+#' @param pts Spatial points object
+#' @param areas Spatial polygons object
+#' @param sil_obj silhouette object
+#' @return ggplot object
+#' @rdname plt_sil_map
+#' @export
+plt_sil_map <- \(pts, areas, sil_obj) {
+
+  cluster <- sil_width <- NULL
+
+  # Create spatial points object w/ cluster membership and silhouette width
+  sil_df <- sil_obj
+  if (!inherits(sil_obj, "data.frame")) {
+    sil_df <- data.frame(sil_obj)
+  }
+
+  # give message if plot likely ordered incorrectly
+  if (!all(rownames(sil_df) == sort(rownames(sil_df)))) {
+    message("sil_df not in rowname order, plot may be incorrect")
+  }
+
+  # Spatial points object
+  pts_plt <- cbind(
+    pts,
+    sil_df[, c("cluster", "sil_width")]
+  ) |>
+    dplyr::mutate(row = dplyr::row_number())
+
+  ggplot2::ggplot(areas) +
+    ggplot2::geom_sf(colour = "black", fill = NA) +
+    ggplot2::geom_sf(
+      data = pts_plt,
+      ggplot2::aes(colour = factor(cluster), alpha = sil_width),
+      size = 5
+    ) +
+    ggplot2::labs(colour = "Cluster", alpha = "Silhouette width") +
     evc_theme()
 }
 
