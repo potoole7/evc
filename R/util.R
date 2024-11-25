@@ -90,6 +90,49 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
   return(total_within_ss)
 }
 
+#' @title Silhouette boxplot
+#' @description Produce boxplot of silhouette widths for different values of k.
+#' @param dist_mat Distance matrix
+#' @param k Number of clusters
+#' @param fun Clustering function, Default: `cluster::pam`
+#' @param show_plt Logical, whether to show plot
+#' @param ret_sil Logical, whether to return dataframe of silhouette values
+#' @param ... Additional arguments to clustering function
+#' @return ggplot object
+#' @rdname sil_boxplot
+#' @export
+sil_boxplot <- function(
+  dist_mat, k = 2:10, fun = cluster::pam, show_plt = TRUE, ret_sil = TRUE, ...
+) {
+
+  sil_width <- NULL
+
+  k <- sort(k)
+  # calculate silhouette coefficients for different k, convert to df to plot
+  sil_df <- dplyr::bind_rows(lapply(k, \(x) {
+    data.frame(cluster::silhouette(fun(dist_mat, x, ...))) |>
+      dplyr::mutate(k = x)
+  }))
+  rownames(sil_df) <- NULL
+
+  # boxplot for different values of k
+  p <- ggplot2::ggplot(sil_df) +
+    ggplot2::geom_boxplot(ggplot2::aes(x = factor(k), y = sil_width)) +
+    ggplot2::labs(x = "K", y = "Silhouette coefficient") +
+    ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0.05)) +
+    evc_theme()
+  if (show_plt) {
+    p
+  }
+
+  ret <- p
+  if (ret_sil) {
+    ret <- list("plot" = p, "sil" = sil_df)
+  }
+  return(ret)
+}
+
+
 #' @title Plot clustering solution on map
 #' @description Plot clustering solution on map
 #' @param pts Spatial points object
