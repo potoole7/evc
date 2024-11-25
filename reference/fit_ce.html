@@ -60,6 +60,7 @@
 <span>  cond_prob <span class="op">=</span> <span class="fl">0.9</span>,</span>
 <span>  f <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">excess</span> <span class="op">~</span> <span class="va">name</span>, <span class="op">~</span><span class="fl">1</span><span class="op">)</span>,</span>
 <span>  split_data <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  fit_no_keef <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  output_all <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -93,6 +94,10 @@ thresholding.</p></dd>
 
 <dt id="arg-split-data">split_data<a class="anchor" aria-label="anchor" href="#arg-split-data"></a></dt>
 <dd><p>if <code>data</code> has variables stacked, unstack.</p></dd>
+
+
+<dt id="arg-fit-no-keef">fit_no_keef<a class="anchor" aria-label="anchor" href="#arg-fit-no-keef"></a></dt>
+<dd><p>If model doesn't fit under Keef constraints, fit without</p></dd>
 
 
 <dt id="arg-output-all">output_all<a class="anchor" aria-label="anchor" href="#arg-output-all"></a></dt>

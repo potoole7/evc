@@ -55,7 +55,7 @@ bivariate extremes for two locations.</p>
     </div>
 
     <div id="ref-usage">
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">kl_sim_eval</span><span class="op">(</span><span class="va">data</span>, <span class="va">kl_prob</span>, k <span class="op">=</span> <span class="cn">NULL</span>, kl_mat <span class="op">=</span> <span class="cn">NULL</span>, cluster_mem <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">kl_sim_eval</span><span class="op">(</span><span class="va">data</span>, <span class="va">kl_prob</span>, k <span class="op">=</span> <span class="cn">NULL</span>, dist_mat <span class="op">=</span> <span class="cn">NULL</span>, cluster_mem <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div id="arguments">
@@ -71,10 +71,11 @@ bivariate extremes for two locations.</p>
 
 
 <dt id="arg-k">k<a class="anchor" aria-label="anchor" href="#arg-k"></a></dt>
-<dd><p>Number of clusters, set to NULL to produce scree plot.</p></dd>
+<dd><p>Number of clusters, set to NULL to produce scree plot and return
+distance matrix.</p></dd>
 
 
-<dt id="arg-kl-mat">kl_mat<a class="anchor" aria-label="anchor" href="#arg-kl-mat"></a></dt>
+<dt id="arg-dist-mat">dist_mat<a class="anchor" aria-label="anchor" href="#arg-dist-mat"></a></dt>
 <dd><p>Distance matrix, set to NULL to calculate.</p></dd>
 
 

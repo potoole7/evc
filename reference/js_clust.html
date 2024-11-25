@@ -57,10 +57,12 @@ Divergence for the conditional extremes model.</p>
     <div id="ref-usage">
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">js_clust</span><span class="op">(</span></span>
 <span>  <span class="va">dependence</span>,</span>
-<span>  nclust <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  k <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dist_mat <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cluster_mem <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dat_max_mult <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  n_dat <span class="op">=</span> <span class="fl">10</span></span>
+<span>  n_dat <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  scree_k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -72,8 +74,13 @@ Divergence for the conditional extremes model.</p>
 <dd><p>List of <code>mexDependence</code> objects for each location.</p></dd>
 
 
-<dt id="arg-nclust">nclust<a class="anchor" aria-label="anchor" href="#arg-nclust"></a></dt>
-<dd><p>Number of clusters to fit.</p></dd>
+<dt id="arg-k">k<a class="anchor" aria-label="anchor" href="#arg-k"></a></dt>
+<dd><p>Number of clusters to fit, set to NULL to produce scree plot and
+return distance matrix.</p></dd>
+
+
+<dt id="arg-dist-mat">dist_mat<a class="anchor" aria-label="anchor" href="#arg-dist-mat"></a></dt>
+<dd><p>Distance matrix, set to NULL to calculate.</p></dd>
 
 
 <dt id="arg-cluster-mem">cluster_mem<a class="anchor" aria-label="anchor" href="#arg-cluster-mem"></a></dt>
@@ -88,6 +95,10 @@ threshold across all locations.</p></dd>
 
 <dt id="arg-n-dat">n_dat<a class="anchor" aria-label="anchor" href="#arg-n-dat"></a></dt>
 <dd><p>Number of data points to use in the Jensen-Shannon divergence.</p></dd>
+
+
+<dt id="arg-scree-k">scree_k<a class="anchor" aria-label="anchor" href="#arg-scree-k"></a></dt>
+<dd><p>Vector of k values to use in scree plot, if <code>k</code> is NULL.</p></dd>
 
 </dl></div>
     <div id="value">
