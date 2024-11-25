@@ -7,16 +7,21 @@ model}
 \usage{
 js_clust(
   dependence,
-  nclust = 3,
+  k = NULL,
+  dist_mat = NULL,
   cluster_mem = NULL,
   dat_max_mult = 2,
-  n_dat = 10
+  n_dat = 10,
+  scree_k = 1:5
 )
 }
 \arguments{
 \item{dependence}{List of \code{mexDependence} objects for each location.}
 
-\item{nclust}{Number of clusters to fit.}
+\item{k}{Number of clusters to fit, set to NULL to produce scree plot and
+return distance matrix.}
+
+\item{dist_mat}{Distance matrix, set to NULL to calculate.}
 
 \item{cluster_mem}{Optional known cluster memberships for each location,
 which can be used to evaluate the quality of the clustering.}
@@ -25,6 +30,8 @@ which can be used to evaluate the quality of the clustering.}
 threshold across all locations.}
 
 \item{n_dat}{Number of data points to use in the Jensen-Shannon divergence.}
+
+\item{scree_k}{Vector of k values to use in scree plot, if \code{k} is NULL.}
 }
 \value{
 List containing the clustering results and, if \code{cluster_mem} is

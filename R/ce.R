@@ -163,7 +163,7 @@ fit_ce <- \(
     ) |>
     # must have unique rows to loop through in `gen_marg_migpd`
     # TODO: Still forces us to have name column, change in gen_marg_migpd?
-    distinct(name, .keep_all = TRUE)
+    dplyr::distinct(name, .keep_all = TRUE)
     
   # Now convert marginals to migpd (i.e. texmex format)
   # TODO: Working, but summary/coef doesn't show new thresholds (needed?)

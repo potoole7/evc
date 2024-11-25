@@ -13,6 +13,7 @@
 #' @param dat_max_mult Multiplier for the maximum multiple of the largest
 #' threshold across all locations.
 #' @param n_dat Number of data points to use in the Jensen-Shannon divergence.
+#' @param scree_k Vector of k values to use in scree plot, if `k` is NULL.
 #' @return List containing the clustering results and, if `cluster_mem` is
 #' provided, the adjusted Rand index.
 #' @rdname js_clust
@@ -25,7 +26,8 @@ js_clust <- \(
   dist_mat = NULL,
   cluster_mem = NULL,
   dat_max_mult = 2,
-  n_dat = 10
+  n_dat = 10,
+  scree_k = 1:5
 ) {
 
   # TODO: Add stopifnot clause for class of dependence
@@ -57,9 +59,12 @@ js_clust <- \(
     # sum distance matrices over different variables together
     dist_mat <- do.call(`+`, dist_mats)
   }
-  
+
   if (is.null(k)) {
-    return(list("dist_mat" = dist_mat, "total_within_ss" = scree_plot(dist_mat)))
+    return(list(
+      "dist_mat"        = dist_mat,
+      "total_within_ss" = scree_plot(dist_mat, k = scree_k)
+    ))
   }
 
   # cluster for rain and wind speed using PAM
@@ -76,7 +81,7 @@ js_clust <- \(
   }
 
   return(ret)
-  
+
   pam_js_clust <- cluster::pam(dist_mat, k = k)
   ret <- pam_js_clust
   # evaluate quality
@@ -87,7 +92,7 @@ js_clust <- \(
     )
     ret <- list("pam" = ret, "adj_rand" = adj_rand)
   }
-  return(ret) 
+  return(ret)
 }
 
 

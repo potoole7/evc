@@ -11,6 +11,7 @@ fit_ce(
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
   split_data = TRUE,
+  fit_no_keef = FALSE,
   output_all = FALSE
 )
 }
@@ -29,6 +30,8 @@ thresholding.}
 \item{f}{Formula for \code{evgam} model.}
 
 \item{split_data}{if \code{data} has variables stacked, unstack.}
+
+\item{fit_no_keef}{If model doesn't fit under Keef constraints, fit without}
 
 \item{output_all}{Logical argument for whether to return quantiles, \code{evgam}
 and marginal fits.}
