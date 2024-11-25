@@ -98,7 +98,7 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
 #' @return ggplot object
 #' @rdname plt_clust
 #' @export
-# TODO: Could make this ggplot method for object
+# TODO: Could make this plot/ggplot method for object
 plt_clust <- \(pts, areas, clust_obj) {
 
   clust <- mediod <- NULL
@@ -114,7 +114,7 @@ plt_clust <- \(pts, areas, clust_obj) {
     stop("Clustering class not currently supported")
   }
 
-  pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |> 
+  pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |>
     dplyr::mutate(row = dplyr::row_number()) |>
     dplyr::mutate(mediod = ifelse(row %in% medoids, TRUE, FALSE))
 
@@ -141,14 +141,14 @@ plt_clust <- \(pts, areas, clust_obj) {
 evc_theme <- \() {
   ggplot2::theme_bw() +
     ggplot2::theme(
-      legend.position = "bottom",
-      plot.title = ggplot2::element_text(size = 16, hjust = 0.5),
-      axis.text = ggplot2::element_text(size = 12),
-      axis.title = ggplot2::element_text(size = 14, face = "bold"),
-      legend.text = ggplot2::element_text(size = 12),
-      strip.text = ggplot2::element_text(size = 13, face = "bold"),
+      legend.position  = "bottom",
+      plot.title       = ggplot2::element_text(size = 16, hjust = 0.5),
+      axis.text        = ggplot2::element_text(size = 12),
+      axis.title       = ggplot2::element_text(size = 14, face = "bold"),
+      legend.text      = ggplot2::element_text(size = 12),
+      strip.text       = ggplot2::element_text(size = 13, face = "bold"),
       strip.background = ggplot2::element_rect(fill = NA, colour = "black"),
-      plot.tag = ggplot2::element_text(size = 16, face = "bold"),
+      plot.tag         = ggplot2::element_text(size = 16, face = "bold"),
       panel.background = ggplot2::element_rect(fill = NA, colour = "black")
     )
 }
