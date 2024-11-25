@@ -1,3 +1,10 @@
+# evc 0.1.7
+
+- Add plots for silhouette width associated with clustering solution:
+  - `sil_boxplot` to plot a boxplot of silhouette widths for different choices 
+  of cluster number, 
+  - `plt_sil_map` to plot a map of silhouette widths for each location.
+
 # evc 0.1.6
 
 - `marg_prob` argument to `fit_ce` can now also be arguments (other than data and response) to `evgam::evgam` , as well as numeric quantile to threshold at.
