@@ -155,6 +155,11 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   } else {
     stop("Clustering class not currently supported")
   }
+  
+  # reorder alphabetically
+  clust_obj[[clust_element]] <- clust_obj[[clust_element]][
+    order(names(clust_obj[[clust_element]]))
+  ]
 
   pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |>
     dplyr::mutate(row = dplyr::row_number()) |>
