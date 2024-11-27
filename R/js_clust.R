@@ -69,15 +69,14 @@ js_clust <- \(
 
   # cluster for rain and wind speed using PAM
   # TODO: functionalise this, exact same as in kl_sim_eval!
-  pam_js_clust <- cluster::pam(dist_mat, k = k)
-  ret <- list("pam" = pam_js_clust)
+  ret <- cluster::pam(dist_mat, k = k)
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
-      pam_js_clust$clustering,
+      ret$clustering,
       cluster_mem
     )
-    ret <- c(ret, list("adj_rand" = adj_rand))
+    ret <- list("pam" = ret, "adj_rand" = adj_rand)
   }
 
   return(ret)

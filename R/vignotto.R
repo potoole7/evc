@@ -45,12 +45,11 @@ kl_sim_eval <- \(
   }
 
   # clustering solution
-  pam_kl_clust <- cluster::pam(dist_mat, k = k)
-  ret <- pam_kl_clust
+  ret <- cluster::pam(dist_mat, k = k)
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
-      pam_kl_clust$clustering,
+      ret$clustering,
       cluster_mem
     )
     ret <- list("pam" = ret, "adj_rand" = adj_rand)
