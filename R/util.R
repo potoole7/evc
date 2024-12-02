@@ -151,16 +151,23 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   } else if (inherits(clust_obj, "pam")) {
     clust_element <- "clustering"
     medoids <- clust_obj$medoids
-    if (inherits(medoids, "matrix")) medoids <- as.numeric(rownames(medoids))
+    # TODO: Temp, cleanup
+    # cond <- inherits(medoids, "matrix")
+    # if (cond && all(rownames(medoids) == as.character(seq_len(nrow(medoids))))) {
+    #   medoids <- as.numeric(rownames(medoids))
+    # }
   } else {
     stop("Clustering class not currently supported")
   }
   
   # reorder alphabetically
-  clust_obj[[clust_element]] <- clust_obj[[clust_element]][
-    order(names(clust_obj[[clust_element]]))
-  ]
+  # TODO: Look into this, required??
+  clust_names <- names(clust_obj[[clust_element]])
+  if (!is.null(clust_names)) {
+    clust_obj[[clust_element]] <- clust_obj[[clust_element]][order(clust_names)]
+  }
 
+  # TODO: Medoids doesn#t work as rows are named, fix!
   pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |>
     dplyr::mutate(row = dplyr::row_number()) |>
     dplyr::mutate(mediod = ifelse(row %in% medoids, TRUE, FALSE))
