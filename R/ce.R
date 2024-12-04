@@ -378,7 +378,9 @@ fit_texmex_dep <- \(
       # if model didn't optimise with Keef 2013 constrains, return NA
       ll <- mod$dependence$loglik
       if (any(is.na(ll)) || any(abs(ll) > 1e9)) {
-        message("Model not fitting properly under Keef constraints")
+        system(sprintf(
+          'echo "%s"', "Model not fitting properly under Keef constraints"
+        ))
         if (fit_no_keef) {
           mod <- do.call(
             texmex::mexDependence,
