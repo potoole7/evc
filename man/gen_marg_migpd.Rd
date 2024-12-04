@@ -4,14 +4,14 @@
 \alias{gen_marg_migpd}
 \title{Generate marginal \code{migpd} objects}
 \usage{
-gen_marg_migpd(data_gpd, data, mqu = 0.95)
+gen_marg_migpd(data_gpd, data, vars)
 }
 \arguments{
 \item{data_gpd}{Scale and shape parameters for each location.}
 
 \item{data}{Data for each location.}
 
-\item{mqu}{Marginal quantile for thresholding.}
+\item{vars}{Variable names for each location.}
 }
 \value{
 List of \code{migpd} objects for each location.
