@@ -22,6 +22,9 @@
 #' @param n_dat Number of data points to use in the Jensen-Shannon divergence.
 #' @param scree_k Vector of k values to use in scree plot, if `k` is NULL.
 #' @param ncores Number of cores to use for parallel computation, Default: 1.
+#' @param par_dist Logical, whether to parallelise the distance computation, 
+#' which is useful for a high number of locations, but has significant 
+#' overheads versus embarrassing parallelism over each variable, Default: FALSE.
 #' @return List containing the clustering results and, if `cluster_mem` is
 #' provided, the adjusted Rand index.
 #' @rdname js_clust
@@ -34,19 +37,10 @@ js_clust <- \(
   dat_max_mult = 2,
   n_dat        = 10,
   ncores       = 1,
+  par_dist     = FALSE,
   scree_k      = 1:5
 ) {
   
-  # Parallel setup
-  # apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
-  # ext_args <- NULL
-  # if (ncores > 1) {
-  #   ext_args <- list(mc.cores = ncores)
-  # }
-  # loop_fun <- \(...) {
-  #   do.call(apply_fun, c(list(...), ext_args))
-  # }
-
   # pull parameter values for each location
   if (is.null(dist_mat)) {
     params <- lapply(dependence, pull_params)
@@ -71,47 +65,48 @@ js_clust <- \(
         n_dat      = n_dat
       )
     }
-    if (ncores == 1) {
-    # dist_mats <- loop_fun(seq_along(params), \(i) {
-      # dist_mats <- lapply(seq_along(params), \(i) {
-      #   proxy::dist(
-      #     params[[i]],
-      #     method = js_div,
-      #     thresh_max = thresh_max[[i]],
-      #     data_max = dat_max_mult * thresh_max[[i]],
-      #     n_dat = n_dat
-      #   )
-      # })
-      dist_mats <- lapply(seq_along(params), \(i) {
+    
+    # parallel setup for embarrassingly parallel mclapply use
+    apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
+    ext_args <- NULL
+    if (ncores > 1) {
+      ext_args <- list(mc.cores = ncores)
+    }
+    loop_fun <- \(...) {
+      do.call(apply_fun, c(list(...), ext_args))
+    }
+    
+    # if not parallelising distance computation (reserved for high # locations)
+    if (par_dist == FALSE) {
+      dist_mats <- loop_fun(seq_along(params), \(i) {
         dist_chunk(
-          seq_len(length(params[[i]])), # don't chunk as only using 1 core
+          seq_len(length(params[[i]])), # don't chunk
           params[[i]], 
           thresh_max[[i]], 
           dat_max_mult, 
           n_dat
         )
       })
-      # parallel
+    # if paralleling distance computation, need to split into chunks
     } else {
       cl <- parallel::makeCluster(ncores)
-      # Export necessary objects to the cluster
-      # parallel::clusterExport(
-      #   cl, 
-      #   c("lst", "thresh_max", "dat_max_mult", "ndat", "dist_chunk")
-      # )
+      # Export cluster objects 
       parallel::clusterExport(
         cl, 
         varlist = c("dist_chunk", "js_div"),
-        envir = environment() # Ensure correct environment
+        envir = environment()
       ) 
       parallel::clusterEvalQ(cl, library(proxy)) 
-      # Split the indices of the list into chunks
-      chunks <- split(seq_along(params[[1]]), sort(rep(seq_len(ncores), length.out = length(params[[1]]))))
+      # split distance calcuation for locations into chunks
+      nlocs <- length(params[[1]])
+      chunks <- split(
+        seq_len(nlocs), 
+        sort(rep(seq_len(ncores), length.out = nlocs))
+      )
       
       # Compute distances in parallel
       dist_mats <- lapply(seq_along(params), \(i) {
-        results <- parallel::parLapply(cl, chunks, \(chunk_idx) {
-        # results <- lapply(chunks, \(chunk_idx) {
+        do.call(rbind, parallel::parLapply(cl, chunks, \(chunk_idx) {
           dist_chunk(
             chunk_idx, 
             lst = params[[i]], 
@@ -119,12 +114,9 @@ js_clust <- \(
             dat_max_mult = dat_max_mult, 
             n_dat = n_dat
           )
-        })
-        # Combine results into a full distance matrix
-        do.call(rbind, results)
+        }))
       })
-      # Stop the cluster
-      parallel::stopCluster(cl)
+      parallel::stopCluster(cl) # stop cluster
     }
     
     # sum distance matrices over different variables together
