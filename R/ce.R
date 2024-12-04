@@ -276,48 +276,51 @@ fit_evgam <- \(
 #' site.
 #' @param data_gpd Scale and shape parameters for each location.
 #' @param data Data for each location.
-#' @param mqu Marginal quantile for thresholding.
+#' @param vars Variable names for each location.
 #' @return List of `migpd` objects for each location.
 #' @rdname gen_marg_migpd
 #' @export
-gen_marg_migpd <- \(data_gpd, data, mqu = 0.95) {
-
-  name <- rain <- wind_speed <- NULL
+gen_marg_migpd <- \(data_gpd, data, vars) {
+  
+  name <- NULL
 
   # Create "dummy" migpd object to fill in with evgam values
-  # TODO: Extend to > 2 variables
   dat_mat <- data |>
     dplyr::filter(name == data$name[[1]]) |>
-    dplyr::select(rain, wind_speed) |>
+    dplyr::select(dplyr::all_of(vars)) |>
     as.matrix()
-  names(dat_mat) <- c("rain", "wind_speed")
 
-  temp <- texmex::migpd(dat_mat, mqu = mqu, penalty = "none")
+  # create dummy `migpd` object, can replace key values with those in data_gpd
+  temp <- texmex::migpd(dat_mat, mqu = 0.9, penalty = "none")
 
+  # loop through each location
   marginal <- lapply(seq_len(nrow(data_gpd)), \(i) {
     # initialise
     spec_marg <- temp
     # replace data
-    # TODO: Extend to work for more variables than just rain and wind_speed
     spec_marg$data <- data |>
       dplyr::filter(name == data_gpd$name[i]) |>
-      dplyr::select(rain, wind_speed) |>
+      dplyr::select(dplyr::all_of(vars)) |>
       as.matrix()
-    names(spec_marg$data) <- c("rain", "wind_speed")
-    # replace thresholds
-    # TODO: Fix, thresholds not included in above
-    spec_marg$models$rain$threshold <- data_gpd$thresh_rain[[i]]
-    spec_marg$models$wind_speed$threshold <- data_gpd$thresh_wind[[i]]
-    # replace coefficients
-    spec_marg$models$rain$coefficients[1:2] <- c(
-      log(data_gpd$scale_rain[i]),
-      data_gpd$shape_rain[i]
-    )
-    spec_marg$models$wind_speed$coefficients[1:2] <- c(
-      log(data_gpd$scale_ws[i]),
-      data_gpd$shape_ws[i]
-    )
-
+    
+    # replace thresholds and coefficients for each variable (for each location)
+    spec_marg$models <- lapply(seq_along(spec_marg$models), \(j) {
+      # replace thresholds for each variable
+      spec_mod <- spec_marg$models[[j]]
+      spec_mod$threshold <- data_gpd[[
+        paste0("thresh_", vars[j])
+      ]][[i]] # thresh may not be fixed quantile, so take row specific value
+      
+      # replace coefficients for each variable
+      spec_mod$coefficients[1:2] <- c(
+        log(data_gpd[[paste0("scale_", vars[j])]][[i]]),
+        data_gpd[[paste0("shape_", vars[j])]][[i]]
+      )
+      class(spec_mod) <- "evmOpt"
+      return(spec_mod)
+    })
+    names(spec_marg$models) <- vars
+    
     return(spec_marg)
   })
   return(marginal)
