@@ -4,6 +4,12 @@
 #' model
 #' @description Function to calculate and cluster on the Jensen-Shannon
 #' Divergence for the conditional extremes model.
+#' When comparing conditional extremes fits for a single variable using the JS 
+#' between any two locations, we use as "data" the maximum of the thresholds 
+#' across all locations, to some multiple `dat_max_mult` of this value, with 
+#' `n_dat` equally spaced points.
+#' \code{cluster:pam} is used to cluster the Jensen-Shannon divergence distance
+#' matrix between all locations, summed across all variables.  
 #' @param dependence List of `mexDependence` objects for each location.
 #' @param k Number of clusters to fit, set to NULL to produce scree plot and
 #' return distance matrix.
@@ -18,8 +24,6 @@
 #' provided, the adjusted Rand index.
 #' @rdname js_clust
 #' @export
-# TODO: Document how globally largest threshold is used as data
-# TODO: Document how pam is also used here
 js_clust <- \(
   dependence,
   k = NULL,
@@ -30,14 +34,11 @@ js_clust <- \(
   scree_k = 1:5
 ) {
 
-  # TODO: Add stopifnot clause for class of dependence
-
   # pull parameter values for each location
   if (is.null(dist_mat)) {
     params <- lapply(dependence, pull_params)
 
     # pull Laplace threshold values for each location
-    # TODO: Problem, last threshold different to others, investigate
     thresh <- lapply(dependence, pull_thresh_trans)
 
     # take maximum Laplace thresholds; want to geenra
@@ -46,6 +47,7 @@ js_clust <- \(
     # list of locs containing vars -> list of vars, each containing all locs
     params <- purrr::transpose(params)
 
+    # calculate distance matrices for each variable
     dist_mats <- lapply(seq_along(params), \(i) {
       proxy::dist(
         params[[i]],
@@ -79,18 +81,6 @@ js_clust <- \(
     ret <- list("pam" = ret, "adj_rand" = adj_rand)
   }
 
-  return(ret)
-
-  pam_js_clust <- cluster::pam(dist_mat, k = k)
-  ret <- pam_js_clust
-  # evaluate quality
-  if (!is.null(cluster_mem)) {
-    adj_rand <- mclust::adjustedRandIndex(
-      pam_js_clust$clustering,
-      cluster_mem
-    )
-    ret <- list("pam" = ret, "adj_rand" = adj_rand)
-  }
   return(ret)
 }
 
