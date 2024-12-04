@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">evc</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.2.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.2.1</span>
       </span>
     </div>
 
@@ -58,7 +58,8 @@
 <span>  vars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rain"</span>, <span class="st">"wind_speed"</span><span class="op">)</span>,</span>
 <span>  mex_dep_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.01</span>, <span class="fl">0.01</span><span class="op">)</span>, dqu <span class="op">=</span> <span class="fl">0.7</span>, fixed_b <span class="op">=</span> <span class="cn">FALSE</span>, PlotLikDo <span class="op">=</span></span>
 <span>    <span class="cn">FALSE</span><span class="op">)</span>,</span>
-<span>  fit_no_keef <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  fit_no_keef <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  loop_fun <span class="op">=</span> <span class="va">lapply</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -79,7 +80,11 @@
 
 
 <dt id="arg-fit-no-keef">fit_no_keef<a class="anchor" aria-label="anchor" href="#arg-fit-no-keef"></a></dt>
-<dd><p>If model doesn't fit under Keef constraints, fit without
+<dd><p>If model doesn't fit under Keef constraints, fit without</p></dd>
+
+
+<dt id="arg-loop-fun">loop_fun<a class="anchor" aria-label="anchor" href="#arg-loop-fun"></a></dt>
+<dd><p>Function to loop through each location, Default: <code>lapply</code>.
 (see <a href="https://rdrr.io/pkg/texmex/man/mexDependence.html" class="external-link">mexDependence</a> for details).</p></dd>
 
 </dl></div>
