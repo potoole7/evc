@@ -37,7 +37,7 @@ fit_ce <- \(
 
   # initialise to remove `devtools::check()` note
   name <- excess <- shape <- n <- NULL
-  
+
   # if marg_prob used as args to `quantile_thresh`, check args correct
   if (is.list(marg_prob)) {
     stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
@@ -49,8 +49,8 @@ fit_ce <- \(
       ))
     }
   }
-  
-  # number of variables 
+
+  # number of variables
   nvars <- length(vars)
 
   # convert to data frame, if required
@@ -67,7 +67,7 @@ fit_ce <- \(
   } else {
     data_df <- data
   }
-  
+
   # must have names column, and all of vars must be columns in data_df
   stopifnot("Must have a `name` column" = "name" %in% names(data_df))
   stopifnot("All of `vars` must be in data" = all(vars %in% names(data_df)))
@@ -117,13 +117,13 @@ fit_ce <- \(
       f = f # formula to use in evgam::evgam, specified arg above
     )
   })
-  
+
   # Join scale and shape estimates into data
   # pull variables specified as predictors in f
   preds <- unique(as.vector(unlist(lapply(
     evgam_fit, \(x) x$m$predictor.names
   ))))
-  
+
   # add predictions of scale and shape parameters for each variable
   data_df_wide <- data_df |>
     dplyr::bind_cols(
@@ -136,7 +136,7 @@ fit_ce <- \(
           )
       })
     )
-  
+
   # add thresholds and number of exceedances for each predictor combination
   # TODO: Replace for loop somehow?
   data_df_wide_join <- data_df_wide
@@ -147,34 +147,34 @@ fit_ce <- \(
           dplyr::mutate(thresh = round(thresh, 3)) |>
           dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
           dplyr::rename(
-            !!paste0("n_", vars[[i]]) := n, 
+            !!paste0("n_", vars[[i]]) := n,
             !!paste0("thresh_", vars[[i]]) := thresh
           ),
         by = preds # predictors supplied to evgam formula
       )
   }
-  
-  data_gpd <- data_df_wide_join |> 
+
+  data_gpd <- data_df_wide_join |>
     # fill in NAs (indicating no exceedances) with 0
     dplyr::mutate(
       dplyr::across(dplyr::starts_with("n_"), ~ifelse(is.na(.), 0, .))
     ) |>
     # must have unique rows to loop through in `gen_marg_migpd`
     dplyr::distinct(name, .keep_all = TRUE)
-    
+
   # Now convert marginals to migpd (i.e. texmex format)
   marginal <- gen_marg_migpd(data_gpd, data_df, vars)
-  names(marginal) <- data_gpd$name 
+  names(marginal) <- data_gpd$name
 
   # Calculate dependence from marginals (default output object)
   # TODO: Replace with our own conditional extremes implementation
   ret <- fit_texmex_dep(
     marginal     = marginal,
-    vars         = vars, 
+    vars         = vars,
     mex_dep_args = list(dqu = cond_prob),
     fit_no_keef  = fit_no_keef
   )
-  
+
   # output more than just dependence object, if desired
   if (output_all) {
     ret <- list(
@@ -281,7 +281,7 @@ fit_evgam <- \(
 #' @rdname gen_marg_migpd
 #' @export
 gen_marg_migpd <- \(data_gpd, data, vars) {
-  
+
   name <- NULL
 
   # Create "dummy" migpd object to fill in with evgam values
@@ -302,7 +302,7 @@ gen_marg_migpd <- \(data_gpd, data, vars) {
       dplyr::filter(name == data_gpd$name[i]) |>
       dplyr::select(dplyr::all_of(vars)) |>
       as.matrix()
-    
+
     # replace thresholds and coefficients for each variable (for each location)
     spec_marg$models <- lapply(seq_along(spec_marg$models), \(j) {
       # replace thresholds for each variable
@@ -310,7 +310,7 @@ gen_marg_migpd <- \(data_gpd, data, vars) {
       spec_mod$threshold <- data_gpd[[
         paste0("thresh_", vars[j])
       ]][[i]] # thresh may not be fixed quantile, so take row specific value
-      
+
       # replace coefficients for each variable
       spec_mod$coefficients[1:2] <- c(
         log(data_gpd[[paste0("scale_", vars[j])]][[i]]),
@@ -320,7 +320,7 @@ gen_marg_migpd <- \(data_gpd, data, vars) {
       return(spec_mod)
     })
     names(spec_marg$models) <- vars
-    
+
     return(spec_marg)
   })
   return(marginal)
@@ -347,6 +347,7 @@ fit_texmex_dep <- \(
   ),
   fit_no_keef = FALSE
 ) {
+
   dependence <- lapply(seq_along(marginal), \(i) {
     # fit for rain and wind speed
     ret <- lapply(vars, \(col) {
