@@ -14,12 +14,12 @@
 #' thresholding.
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
-#' @param split_data if `data` has variables stacked, unstack.
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' @param output_all Logical argument for whether to return quantiles, `evgam`
 #' and marginal fits.
 #' @return Object of type `mexDependence` for each location.
 #' @rdname fit_ce
+#' @importFrom rlang .data :=
 #' @export
 fit_ce <- \(
   data,
@@ -31,14 +31,13 @@ fit_ce <- \(
   ),
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
-  split_data  = TRUE,
   fit_no_keef = FALSE,
   output_all  = FALSE
 ) {
 
   # initialise to remove `devtools::check()` note
   name <- excess <- shape <- n <- NULL
-
+  
   # if marg_prob used as args to `quantile_thresh`, check args correct
   if (is.list(marg_prob)) {
     stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
@@ -50,31 +49,28 @@ fit_ce <- \(
       ))
     }
   }
+  
+  # number of variables 
+  nvars <- length(vars)
 
-  # TODO: Should really be done outside of this function, shouldn't be here!
-  # convert to dataframe
-  # TODO: Tidy up, quite verbose
-  # TODO: Need to extend to multiple variables, using length of vars
-  if (!is.data.frame(data) && split_data) {
+  # convert to data frame, if required
+  if (!is.data.frame(data) && is.list(data)) {
     data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
-      n <- length(data[[i]])
-      ret <- data.frame(
-        "rain"       = data[[i]][1:(n / 2)],
-        "wind_speed" = data[[i]][((n / 2) + 1):n]
-      ) |>
-        dplyr::mutate(name = paste0("location_", i))
+      ret <- as.data.frame(data[[i]])
+      # Add name column if not in list already
+      if (!"name" %in% names(ret)) {
+        ret <- ret |>
+          dplyr::mutate(name = paste0("location_", i))
+      }
     }))
-  } else if (!is.data.frame(data)) {
-    data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
-      as.data.frame(data[[i]]) |>
-        dplyr::mutate(name = paste0("location_", i))
-    }))
-    names(data_df)[1:2] <- c("rain", "wind_speed") # TODO: Change to var_j
+    names(data_df)[seq_len(nvars)] <- vars
   } else {
     data_df <- data
   }
-
-  # add row number for labelling
+  
+  # must have names column, and all of vars must be columns in data_df
+  stopifnot("Must have a `name` column" = "name" %in% names(data_df))
+  stopifnot("All of `vars` must be in data" = all(vars %in% names(data_df)))
 
   # First, calculate threshold (90th quantile across all locations)
   if (!is.list(marg_prob) && is.numeric(marg_prob)) {
@@ -92,8 +88,9 @@ fit_ce <- \(
         dplyr::filter(excess > 0)
     })
   # If thresh is a list, assume it is arguments to quantile_thresh
+  # TODO: May be easier to just copy each vars column as response in data_df
+  # Would allow for simpler formula specification
   } else if (is.list(marg_prob)) {
-    # TODO: Redo with do.call
     data_thresh <- lapply(vars, \(x) {
       # Change formula to include response in question
       marg_prob$f <- lapply(marg_prob$f, \(f_spec) {
@@ -102,8 +99,7 @@ fit_ce <- \(
       # Run `quantile_thresh` for each response with specified args
       do.call(
         quantile_thresh,
-        # data args
-        args = c(list(data = data_df, response = x),
+        args = c(list(data = data_df, response = x), # data args
         marg_prob
         )
       )
@@ -113,7 +109,7 @@ fit_ce <- \(
   }
 
   # Now fit evgam model for each marginal
-  # TODO: Allow use of base `texmex` (i.e. migpd instead of evgam) as well!
+  # TODO: Allow use of mev as well as evgam (use e.g. identical(fun, evgam))
   evgam_fit <- lapply(data_thresh, \(x) {
     fit_evgam(
       data = x,
@@ -121,61 +117,64 @@ fit_ce <- \(
       f = f # formula to use in evgam::evgam, specified arg above
     )
   })
-
+  
   # Join scale and shape estimates into data
-  # TODO: Functionalise to work with > 2 variables and for different names
   # pull variables specified as predictors in f
   preds <- unique(as.vector(unlist(lapply(
     evgam_fit, \(x) x$m$predictor.names
   ))))
-  # TODO: Recursively perform this action
-  # TODO: Change pipe function
-  data_gpd <- data_df |>
-    # add scale and shape parameters for each location
+  
+  # add predictions of scale and shape parameters for each variable
+  data_df_wide <- data_df |>
     dplyr::bind_cols(
-      dplyr::rename(
-        evgam_fit[[1]]$predictions,
-        scale_rain = scale,
-        shape_rain = shape),
-      dplyr::rename(
-        evgam_fit[[2]]$predictions,
-        scale_ws = scale,
-        shape_ws = shape),
-    ) |>
-    # add thresholds and number of exceedances for each predictor combo
-    dplyr::left_join(
-      data_thresh[[1]] |>
-        dplyr::mutate(thresh = round(thresh, 3)) |>
-        dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
-        dplyr::rename(n_rain = n, thresh_rain = thresh),
-      by = preds
-    ) |>
-    dplyr::left_join(
-      data_thresh[[2]] |>
-        dplyr::mutate(thresh = round(thresh, 3)) |>
-        dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
-        dplyr::rename(n_wind = n, thresh_wind = thresh),
-      by = preds
-    ) |>
+      # for each variable, take predictions for scale + shape, rename
+      lapply(seq_along(evgam_fit), \(i) {
+        evgam_fit[[i]]$predictions |>
+          dplyr::rename(
+            !!paste0("scale_", vars[[i]]) := scale,
+            !!paste0("shape_", vars[[i]]) := shape
+          )
+      })
+    )
+  
+  # add thresholds and number of exceedances for each predictor combination
+  # TODO: Replace for loop somehow?
+  data_df_wide_join <- data_df_wide
+  for (i in seq_len(nvars)) {
+    data_df_wide_join <- data_df_wide_join |>
+      dplyr::left_join(
+        data_thresh[[i]] |>
+          dplyr::mutate(thresh = round(thresh, 3)) |>
+          dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
+          dplyr::rename(
+            !!paste0("n_", vars[[i]]) := n, 
+            !!paste0("thresh_", vars[[i]]) := thresh
+          ),
+        by = preds # predictors supplied to evgam formula
+      )
+  }
+  
+  data_gpd <- data_df_wide_join |> 
     # fill in NAs (indicating no exceedances) with 0
     dplyr::mutate(
-      dplyr::across(dplyr::contains("n_"), \(x) ifelse(is.na(x), 0, x))
+      dplyr::across(dplyr::starts_with("n_"), ~ifelse(is.na(.), 0, .))
     ) |>
     # must have unique rows to loop through in `gen_marg_migpd`
-    # TODO: Still forces us to have name column, change in gen_marg_migpd?
     dplyr::distinct(name, .keep_all = TRUE)
     
   # Now convert marginals to migpd (i.e. texmex format)
-  # TODO: Working, but summary/coef doesn't show new thresholds (needed?)
-  marginal <- gen_marg_migpd(data_gpd, data_df)
-  names(marginal) <- data_gpd$name # TODO: Change
+  marginal <- gen_marg_migpd(data_gpd, data_df, vars)
+  names(marginal) <- data_gpd$name 
 
   # Calculate dependence from marginals (default output object)
+  # TODO: Replace with our own conditional extremes implementation
   ret <- fit_texmex_dep(
-    marginal,
+    marginal     = marginal,
+    vars         = vars, 
     mex_dep_args = list(dqu = cond_prob),
-    fit_no_keef = fit_no_keef
+    fit_no_keef  = fit_no_keef
   )
+  
   # output more than just dependence object, if desired
   if (output_all) {
     ret <- list(
@@ -201,12 +200,10 @@ fit_ce <- \(
 #' @return Dataframe with `thresh` and `excess` columns, optionally thresholded.
 #' @rdname quantile_thresh
 #' @export
-# TODO: Vary tau and see how that effects results (QQ plots, etc)
 quantile_thresh <- function(
   data,
   response,
   f = list(
-    # response ~ s(lon, lat, k = 50), # location
     stats::formula(paste(response, " ~ s(lon, lat, k = 50)")), # location
     ~ s(lon, lat, k = 40)                               # logscale
   ),
@@ -220,9 +217,9 @@ quantile_thresh <- function(
   # jitter, if specified, to remove 0s when calculating quantiles
   if (jitter == TRUE) {
     data <- data |>
-      dplyr::mutate(
-        dplyr::across(dplyr::all_of(response), ~ . + stats::rnorm(n(), 0, 1e-6))
-      )
+      dplyr::mutate(dplyr::across(
+        dplyr::all_of(response), ~ . + stats::rnorm(n(), 0, 1e-6)
+      ))
   }
 
   # fit the quantile regression model at tau'th percentile
@@ -357,7 +354,7 @@ fit_texmex_dep <- \(
 
       # if model didn't optimise with Keef 2013 constrains, return NA
       ll <- mod$dependence$loglik
-      if (is.na(ll) || abs(mod$dependence$loglik) > 1e9) {
+      if (any(is.na(ll)) || any(abs(ll) > 1e9)) {
         message("Model not fitting properly under Keef constraints")
         if (fit_no_keef) {
           mod <- do.call(
