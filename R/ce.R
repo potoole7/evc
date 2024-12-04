@@ -14,6 +14,7 @@
 #' thresholding.
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
+#' @param ncores Number of cores to use for parallel computation, Default: 1.
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' @param output_all Logical argument for whether to return quantiles, `evgam`
 #' and marginal fits.
@@ -31,6 +32,7 @@ fit_ce <- \(
   ),
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
+  ncores      = 1,
   fit_no_keef = FALSE,
   output_all  = FALSE
 ) {
@@ -49,7 +51,17 @@ fit_ce <- \(
       ))
     }
   }
-
+  
+  # Parallel setup
+  apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
+  ext_args <- NULL
+  if (ncores > 1) {
+    ext_args <- list(mc.cores = ncores)
+  }
+  loop_fun <- \(...) {
+    do.call(apply_fun, c(list(...), ext_args))
+  }
+  
   # number of variables
   nvars <- length(vars)
 
@@ -110,7 +122,8 @@ fit_ce <- \(
 
   # Now fit evgam model for each marginal
   # TODO: Allow use of mev as well as evgam (use e.g. identical(fun, evgam))
-  evgam_fit <- lapply(data_thresh, \(x) {
+  # evgam_fit <- lapply(data_thresh, \(x) {
+  evgam_fit <- loop_fun(data_thresh, \(x) {
     fit_evgam(
       data = x,
       pred_data = data_df,
@@ -163,7 +176,7 @@ fit_ce <- \(
     dplyr::distinct(name, .keep_all = TRUE)
 
   # Now convert marginals to migpd (i.e. texmex format)
-  marginal <- gen_marg_migpd(data_gpd, data_df, vars)
+  marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)
   names(marginal) <- data_gpd$name
 
   # Calculate dependence from marginals (default output object)
@@ -172,7 +185,8 @@ fit_ce <- \(
     marginal     = marginal,
     vars         = vars,
     mex_dep_args = list(dqu = cond_prob),
-    fit_no_keef  = fit_no_keef
+    fit_no_keef  = fit_no_keef, 
+    loop_fun     = loop_fun
   )
 
   # output more than just dependence object, if desired
@@ -277,10 +291,11 @@ fit_evgam <- \(
 #' @param data_gpd Scale and shape parameters for each location.
 #' @param data Data for each location.
 #' @param vars Variable names for each location.
+#' @param loop_fun Function to loop through each location, Default: `lapply`.
 #' @return List of `migpd` objects for each location.
 #' @rdname gen_marg_migpd
 #' @export
-gen_marg_migpd <- \(data_gpd, data, vars) {
+gen_marg_migpd <- \(data_gpd, data, vars, loop_fun = lapply) {
 
   name <- NULL
 
@@ -294,7 +309,8 @@ gen_marg_migpd <- \(data_gpd, data, vars) {
   temp <- texmex::migpd(dat_mat, mqu = 0.9, penalty = "none")
 
   # loop through each location
-  marginal <- lapply(seq_len(nrow(data_gpd)), \(i) {
+  # jmarginal <- lapply(seq_len(nrow(data_gpd)), \(i) {
+  marginal <- loop_fun(seq_len(nrow(data_gpd)), \(i) {
     # initialise
     spec_marg <- temp
     # replace data
@@ -332,23 +348,26 @@ gen_marg_migpd <- \(data_gpd, data, vars) {
 #' @param vars Variables to fit dependence on.
 #' @param mex_dep_args Arguments to pass to \link[texmex]{mexDependence}.
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
+#' @param loop_fun Function to loop through each location, Default: `lapply`.
 #' (see \link[texmex]{mexDependence} for details).
 #' @return List of `mexDependence` objects for each site.
 #' @rdname fit_texmex_dep
 #' @export
 fit_texmex_dep <- \(
   marginal,
-  vars = c("rain", "wind_speed"),
+  vars         = c("rain", "wind_speed"),
   mex_dep_args = list(
-    start = c(0.01, 0.01),
-    dqu = 0.7,
-    fixed_b = FALSE,
+    start     = c(0.01, 0.01),
+    dqu       = 0.7,
+    fixed_b   = FALSE,
     PlotLikDo = FALSE
   ),
-  fit_no_keef = FALSE
+  fit_no_keef  = FALSE, 
+  loop_fun     = lapply
 ) {
 
-  dependence <- lapply(seq_along(marginal), \(i) {
+  # dependence <- lapply(seq_along(marginal), \(i) {
+  dependence <- loop_fun(seq_along(marginal), \(i) {
     # fit for rain and wind speed
     ret <- lapply(vars, \(col) {
       mod <- do.call(
