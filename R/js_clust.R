@@ -201,46 +201,16 @@ js_div <- \(
     return((x[["s"]] * (data ^ x[["b"]]))^2)
   }
 
-  # calculate mu, sigma for each non-conditioning variable at each data point
-  # TODO: Clean up code, very messy!!
-  # TODO: Change to work for > 2 variables
-  # TODO: Get rid of below notes
-  # Previously: Only (non-)conditioned on one variable, so only one mu and sigma for 
-  # parameter related to other variable
-  # Now: > 2 non-conditioned variables, so need mu for each (just summing anyway)
-  # mus <- lapply(list(params_x, params_y), mu_fun, data = data)
-  ncols <- ncol(params_x)
-  mus <- lapply(seq_len(ncols), \(i) { 
-    ret <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
-    names(ret) <- c("loc_x", "loc_y")
-    return(ret)
-  })
-  
-  # vars <- lapply(list(params_x, params_y), var_fun, data = data)
-  vars <- lapply(seq_len(ncols), \(i) {
-    ret <- lapply(list(params_x[, i], params_y[, i]), var_fun, data = data)
-    names(ret) <- c("loc_x", "loc_y")
-    return(ret)
-  })
-  names(mus) <- names(vars) <- colnames(params_x)
-  
-  # TODO: Change above to be one lapply call! Could also do below sum as well?
-  # norm_pars <- lapply(seq_len(ncol(params_x)), \(i) {
-  #   mus  <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
-  #   vars <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
-  #   return(list("mu" = mus, "var" = vars))
-  #   # lapply(c(mu_fun, var_fun))
-  # })
-
-  # Calculate Jensen-Shannon divergence for each data point
-  # loop across variables
-  # TODO: Could combine this with above as well??
-  return(sum(vapply(seq_len(ncols), \(i) {
-    # loop across mu and variance values for each respective data point
-    sum(mapply(
+  # loop across variables, corresponding to columns in params_x, sum JS
+  return(sum(vapply(seq_len(ncol(params_x)), \(i) {
+    # calculate mu, sigma at each data point
+    mus <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
+    vars <- lapply(list(params_x[, i], params_y[, i]), var_fun, data = data)
+    # Calculate Jensen-Shannon divergence for each data point
+    mapply(
       js_gauss,
-      mu1 = mus[[i]][[1]], mu2 = mus[[i]][[2]],
-      var1 = vars[[i]][[1]], var2 = vars[[i]][[2]]
-    ))
-  }, numeric(1))))
+      mu1 = mus[[1]], mu2 = mus[[2]],
+      var1 = vars[[1]], var2 = vars[[2]]
+    )
+  }, numeric(length(data)))))
 }
