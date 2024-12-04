@@ -40,4 +40,11 @@ provided, the adjusted Rand index.
 \description{
 Function to calculate and cluster on the Jensen-Shannon
 Divergence for the conditional extremes model.
+When comparing conditional extremes fits for a single variable using the JS
+between any two locations, we need to use the same "data" for each location.
+Therefore, we look at values from the maximum of the thresholds
+at each location, to some multiple \code{dat_max_mult} of this, with
+\code{n_dat} equally spaced points.
+\code{cluster:pam} is used to cluster the Jensen-Shannon divergence distance
+matrix between all locations, summed across all variables.
 }
