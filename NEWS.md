@@ -1,3 +1,8 @@
+# evc 0.2.1
+
+- `fit_ce` and `js_clust` now can optionally be run in parallel using 
+`parallel::mcapply` (on macOS and Linux). 
+
 # evc 0.2.0
 
 - `fit_ce` and `js_clust` can now work for data with more than two variables on 
