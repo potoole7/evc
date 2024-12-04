@@ -93,19 +93,18 @@ js_clust <- \(
 #' @return List of named vectors containing the parameters for each location.
 #' @keywords internal
 pull_params <- \(dep) {
-  # fail if not list of mex objects for single location
+  # fail if not list of `mex` objects for single location
   stopifnot(is.list(dep))
   # loop through conditioning variables for single location
   return(lapply(dep, \(x) {
-    # pull parameter vals
-    ret <- as.vector(x$dependence$coefficients)
-    names(ret) <- rownames(x$dependence$coefficients)
-    # remove c and d if 0 (i.e. Laplace margins, rather than Gumbel)
-    if (ret["c"] == 0 && ret["d"] == 0) {
-      ret <- ret[!names(ret) %in% c("c", "d")]
+    # pull parameter matrix
+    ret <- x$dependence$coefficients
+    if  (all(ret["c", ] == 0) && all(ret["d", ] == 0)) {
+      ret <- ret[!rownames(ret) %in% c("c", "d"), , drop = FALSE]
     }
     return(ret)
   }))
+  
 }
 
 #' @title Pull thresholds for conditional extremes model
@@ -185,10 +184,10 @@ js_div <- \(
 ) {
 
   # test that input vectors have correct conditional extremes parameters
-  stopifnot(is.vector(params_x) && is.vector(params_y))
-  stopifnot(
-    all(c(names(params_x), names(params_y)) == rep(c("a", "b", "m", "s"), 2))
-  )
+  stopifnot(is.matrix(params_x) && is.matrix(params_y))
+  stopifnot(all(
+    c(rownames(params_x), rownames(params_y)) == rep(c("a", "b", "m", "s"), 2)
+  ))
 
   # create data sequence from specified arguments
   data <- seq(thresh_max, data_max, length = n_dat)
@@ -202,14 +201,46 @@ js_div <- \(
     return((x[["s"]] * (data ^ x[["b"]]))^2)
   }
 
-  # calculate mu and sigma for each data point
-  mus <- lapply(list(params_x, params_y), mu_fun, data = data)
-  vars <- lapply(list(params_x, params_y), var_fun, data = data)
+  # calculate mu, sigma for each non-conditioning variable at each data point
+  # TODO: Clean up code, very messy!!
+  # TODO: Change to work for > 2 variables
+  # TODO: Get rid of below notes
+  # Previously: Only (non-)conditioned on one variable, so only one mu and sigma for 
+  # parameter related to other variable
+  # Now: > 2 non-conditioned variables, so need mu for each (just summing anyway)
+  # mus <- lapply(list(params_x, params_y), mu_fun, data = data)
+  ncols <- ncol(params_x)
+  mus <- lapply(seq_len(ncols), \(i) { 
+    ret <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
+    names(ret) <- c("loc_x", "loc_y")
+    return(ret)
+  })
+  
+  # vars <- lapply(list(params_x, params_y), var_fun, data = data)
+  vars <- lapply(seq_len(ncols), \(i) {
+    ret <- lapply(list(params_x[, i], params_y[, i]), var_fun, data = data)
+    names(ret) <- c("loc_x", "loc_y")
+    return(ret)
+  })
+  names(mus) <- names(vars) <- colnames(params_x)
+  
+  # TODO: Change above to be one lapply call! Could also do below sum as well?
+  # norm_pars <- lapply(seq_len(ncol(params_x)), \(i) {
+  #   mus  <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
+  #   vars <- lapply(list(params_x[, i], params_y[, i]), mu_fun, data = data)
+  #   return(list("mu" = mus, "var" = vars))
+  #   # lapply(c(mu_fun, var_fun))
+  # })
 
   # Calculate Jensen-Shannon divergence for each data point
-  # TODO: How best to summarise across all data points? Sum? Average?
-  return(sum(mapply(
-    js_gauss,
-    mu1 = mus[[1]], mu2 = mus[[2]], var1 = vars[[1]], var2 = vars[[2]]
-  )))
+  # loop across variables
+  # TODO: Could combine this with above as well??
+  return(sum(vapply(seq_len(ncols), \(i) {
+    # loop across mu and variance values for each respective data point
+    sum(mapply(
+      js_gauss,
+      mu1 = mus[[i]][[1]], mu2 = mus[[i]][[2]],
+      var1 = vars[[i]][[1]], var2 = vars[[i]][[2]]
+    ))
+  }, numeric(1))))
 }
