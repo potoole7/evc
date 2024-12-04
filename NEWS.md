@@ -1,3 +1,8 @@
+# evc 0.2.0
+
+- `fit_ce` and `js_clust` can now work for data with more than two variables on 
+which to condition and cluster on.
+
 # evc 0.1.7
 
 - Add plots for silhouette width associated with clustering solution:
