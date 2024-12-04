@@ -38,14 +38,14 @@ js_clust <- \(
 ) {
   
   # Parallel setup
-  apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
-  ext_args <- NULL
-  if (ncores > 1) {
-    ext_args <- list(mc.cores = ncores)
-  }
-  loop_fun <- \(...) {
-    do.call(apply_fun, c(list(...), ext_args))
-  }
+  # apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
+  # ext_args <- NULL
+  # if (ncores > 1) {
+  #   ext_args <- list(mc.cores = ncores)
+  # }
+  # loop_fun <- \(...) {
+  #   do.call(apply_fun, c(list(...), ext_args))
+  # }
 
   # pull parameter values for each location
   if (is.null(dist_mat)) {
@@ -61,16 +61,72 @@ js_clust <- \(
     params <- purrr::transpose(params)
 
     # calculate distance matrices for each variable
-    dist_mats <- loop_fun(seq_along(params), \(i) {
+    dist_chunk <- function(chunk_idx, lst, thresh_max, dat_max_mult, n_dat) {
       proxy::dist(
-        params[[i]],
-        method = js_div,
-        thresh_max = thresh_max[[i]],
-        data_max = dat_max_mult * thresh_max[[i]],
-        n_dat = n_dat
+        lst[chunk_idx], 
+        lst,
+        method     = js_div,
+        thresh_max = thresh_max,
+        data_max   = dat_max_mult * thresh_max,
+        n_dat      = n_dat
       )
-    })
-
+    }
+    if (ncores == 1) {
+    # dist_mats <- loop_fun(seq_along(params), \(i) {
+      # dist_mats <- lapply(seq_along(params), \(i) {
+      #   proxy::dist(
+      #     params[[i]],
+      #     method = js_div,
+      #     thresh_max = thresh_max[[i]],
+      #     data_max = dat_max_mult * thresh_max[[i]],
+      #     n_dat = n_dat
+      #   )
+      # })
+      dist_mats <- lapply(seq_along(params), \(i) {
+        dist_chunk(
+          seq_len(length(params[[i]])), # don't chunk as only using 1 core
+          params[[i]], 
+          thresh_max[[i]], 
+          dat_max_mult, 
+          n_dat
+        )
+      })
+      # parallel
+    } else {
+      cl <- parallel::makeCluster(ncores)
+      # Export necessary objects to the cluster
+      # parallel::clusterExport(
+      #   cl, 
+      #   c("lst", "thresh_max", "dat_max_mult", "ndat", "dist_chunk")
+      # )
+      parallel::clusterExport(
+        cl, 
+        varlist = c("dist_chunk", "js_div"),
+        envir = environment() # Ensure correct environment
+      ) 
+      parallel::clusterEvalQ(cl, library(proxy)) 
+      # Split the indices of the list into chunks
+      chunks <- split(seq_along(params[[1]]), sort(rep(seq_len(ncores), length.out = length(params[[1]]))))
+      
+      # Compute distances in parallel
+      dist_mats <- lapply(seq_along(params), \(i) {
+        results <- parallel::parLapply(cl, chunks, \(chunk_idx) {
+        # results <- lapply(chunks, \(chunk_idx) {
+          dist_chunk(
+            chunk_idx, 
+            lst = params[[i]], 
+            thresh_max = thresh_max[[i]], 
+            dat_max_mult = dat_max_mult, 
+            n_dat = n_dat
+          )
+        })
+        # Combine results into a full distance matrix
+        do.call(rbind, results)
+      })
+      # Stop the cluster
+      parallel::stopCluster(cl)
+    }
+    
     # sum distance matrices over different variables together
     dist_mat <- do.call(`+`, dist_mats)
   }
