@@ -4,7 +4,7 @@
 \alias{gen_marg_migpd}
 \title{Generate marginal \code{migpd} objects}
 \usage{
-gen_marg_migpd(data_gpd, data, vars)
+gen_marg_migpd(data_gpd, data, vars, loop_fun = lapply)
 }
 \arguments{
 \item{data_gpd}{Scale and shape parameters for each location.}
@@ -12,6 +12,8 @@ gen_marg_migpd(data_gpd, data, vars)
 \item{data}{Data for each location.}
 
 \item{vars}{Variable names for each location.}
+
+\item{loop_fun}{Function to loop through each location, Default: \code{lapply}.}
 }
 \value{
 List of \code{migpd} objects for each location.

@@ -9,7 +9,8 @@ fit_texmex_dep(
   vars = c("rain", "wind_speed"),
   mex_dep_args = list(start = c(0.01, 0.01), dqu = 0.7, fixed_b = FALSE, PlotLikDo =
     FALSE),
-  fit_no_keef = FALSE
+  fit_no_keef = FALSE,
+  loop_fun = lapply
 )
 }
 \arguments{
@@ -19,7 +20,9 @@ fit_texmex_dep(
 
 \item{mex_dep_args}{Arguments to pass to \link[texmex]{mexDependence}.}
 
-\item{fit_no_keef}{If model doesn't fit under Keef constraints, fit without
+\item{fit_no_keef}{If model doesn't fit under Keef constraints, fit without}
+
+\item{loop_fun}{Function to loop through each location, Default: \code{lapply}.
 (see \link[texmex]{mexDependence} for details).}
 }
 \value{

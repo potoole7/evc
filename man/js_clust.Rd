@@ -12,6 +12,7 @@ js_clust(
   cluster_mem = NULL,
   dat_max_mult = 2,
   n_dat = 10,
+  ncores = 1,
   scree_k = 1:5
 )
 }
@@ -30,6 +31,8 @@ which can be used to evaluate the quality of the clustering.}
 threshold across all locations.}
 
 \item{n_dat}{Number of data points to use in the Jensen-Shannon divergence.}
+
+\item{ncores}{Number of cores to use for parallel computation, Default: 1.}
 
 \item{scree_k}{Vector of k values to use in scree plot, if \code{k} is NULL.}
 }

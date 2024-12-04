@@ -10,6 +10,7 @@ fit_ce(
   marg_prob = list(f = list("response ~ name", "~ name"), tau = 0.95, jitter = TRUE),
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
+  ncores = 1,
   fit_no_keef = FALSE,
   output_all = FALSE
 )
@@ -27,6 +28,8 @@ thresholding.}
 \item{cond_prob}{Conditional quantile for dependence modelling.}
 
 \item{f}{Formula for \code{evgam} model.}
+
+\item{ncores}{Number of cores to use for parallel computation, Default: 1.}
 
 \item{fit_no_keef}{If model doesn't fit under Keef constraints, fit without}
 
