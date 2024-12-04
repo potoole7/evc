@@ -13,6 +13,7 @@ js_clust(
   dat_max_mult = 2,
   n_dat = 10,
   ncores = 1,
+  par_dist = FALSE,
   scree_k = 1:5
 )
 }
@@ -33,6 +34,10 @@ threshold across all locations.}
 \item{n_dat}{Number of data points to use in the Jensen-Shannon divergence.}
 
 \item{ncores}{Number of cores to use for parallel computation, Default: 1.}
+
+\item{par_dist}{Logical, whether to parallelise the distance computation,
+which is useful for a high number of locations, but has significant
+overheads versus embarrassing parallelism over each variable, Default: FALSE.}
 
 \item{scree_k}{Vector of k values to use in scree plot, if \code{k} is NULL.}
 }
