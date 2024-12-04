@@ -21,19 +21,31 @@
 #' threshold across all locations.
 #' @param n_dat Number of data points to use in the Jensen-Shannon divergence.
 #' @param scree_k Vector of k values to use in scree plot, if `k` is NULL.
+#' @param ncores Number of cores to use for parallel computation, Default: 1.
 #' @return List containing the clustering results and, if `cluster_mem` is
 #' provided, the adjusted Rand index.
 #' @rdname js_clust
 #' @export
 js_clust <- \(
   dependence,
-  k = NULL,
-  dist_mat = NULL,
-  cluster_mem = NULL,
+  k            = NULL,
+  dist_mat     = NULL,
+  cluster_mem  = NULL,
   dat_max_mult = 2,
-  n_dat = 10,
-  scree_k = 1:5
+  n_dat        = 10,
+  ncores       = 1,
+  scree_k      = 1:5
 ) {
+  
+  # Parallel setup
+  apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
+  ext_args <- NULL
+  if (ncores > 1) {
+    ext_args <- list(mc.cores = ncores)
+  }
+  loop_fun <- \(...) {
+    do.call(apply_fun, c(list(...), ext_args))
+  }
 
   # pull parameter values for each location
   if (is.null(dist_mat)) {
@@ -49,7 +61,7 @@ js_clust <- \(
     params <- purrr::transpose(params)
 
     # calculate distance matrices for each variable
-    dist_mats <- lapply(seq_along(params), \(i) {
+    dist_mats <- loop_fun(seq_along(params), \(i) {
       proxy::dist(
         params[[i]],
         method = js_div,
