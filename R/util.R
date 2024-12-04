@@ -102,7 +102,12 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
 #' @rdname sil_boxplot
 #' @export
 sil_boxplot <- function(
-  dist_mat, k = 2:10, fun = cluster::pam, show_plt = TRUE, ret_sil = TRUE, ...
+  dist_mat,
+  k = 2:10,
+  fun = cluster::pam,
+  show_plt = TRUE,
+  ret_sil = TRUE,
+  ...
 ) {
 
   sil_width <- NULL
@@ -118,7 +123,7 @@ sil_boxplot <- function(
   # boxplot for different values of k
   p <- ggplot2::ggplot(sil_df) +
     ggplot2::geom_boxplot(ggplot2::aes(x = factor(k), y = sil_width)) +
-    ggplot2::labs(x = "K", y = "Silhouette coefficient") +
+    ggplot2::labs(x = "k", y = "Silhouette coefficient") +
     ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0.05)) +
     evc_theme()
   if (show_plt) {
@@ -159,7 +164,7 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   } else {
     stop("Clustering class not currently supported")
   }
-  
+
   # reorder alphabetically
   # TODO: Look into this, required??
   clust_names <- names(clust_obj[[clust_element]])
