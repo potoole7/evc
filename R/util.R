@@ -152,44 +152,46 @@ plt_clust_map <- \(pts, areas, clust_obj) {
 
   if (inherits(clust_obj, "kmeans")) {
     clust_element <- "cluster"
-    medoids <- NA
+    medoid_locs <- NA
   } else if (inherits(clust_obj, "pam")) {
     clust_element <- "clustering"
     medoids <- clust_obj$medoids
-    # TODO: Temp, cleanup
-    # cond <- inherits(medoids, "matrix")
-    # if (cond && all(rownames(medoids) == as.character(seq_len(nrow(medoids))))) {
-    #   medoids <- as.numeric(rownames(medoids))
-    # }
+    if (!is.null(rownames(medoids))) {
+      medoid_locs <- rownames(medoids)
+    } else medoid_locs <- NA
   } else {
     stop("Clustering class not currently supported")
   }
 
   # reorder alphabetically
   # TODO: Look into this, required??
-  clust_names <- names(clust_obj[[clust_element]])
-  if (!is.null(clust_names)) {
-    clust_obj[[clust_element]] <- clust_obj[[clust_element]][order(clust_names)]
-  }
+  # clust_names <- names(clust_obj[[clust_element]])
+  # if (!is.null(clust_names)) {
+  #   clust_obj[[clust_element]] <- clust_obj[[clust_element]][order(clust_names)]
+  # }
 
   # TODO: Medoids doesn#t work as rows are named, fix!
   pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |>
-    dplyr::mutate(row = dplyr::row_number()) |>
-    dplyr::mutate(mediod = ifelse(row %in% medoids, TRUE, FALSE))
-
+    dplyr::mutate(
+      medoid = ifelse(name %in% medoid_locs, TRUE, FALSE), 
+      medoid = factor(medoid, levels = c(FALSE, TRUE))
+    )
+  
   ggplot2::ggplot(areas) +
     ggplot2::geom_sf(colour = "black", fill = NA) +
     ggplot2::geom_sf(
       data = pts_plt,
       ggplot2::aes(
-        colour = factor(clust), shape = mediod, size = as.numeric(mediod)
+        colour = factor(clust), shape = medoid, size = as.numeric(medoid)
       ),
       alpha = 0.8
     ) +
     ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
-    ggplot2::scale_size_continuous(range = c(3, 6)) +
+    ggplot2::scale_size_continuous(range = c(4, 8)) +
     ggplot2::guides(shape = "none", size = "none") +
-    evc_theme()
+    labs(colour = "Cluster") + 
+    evc_theme() + 
+    ggsci::scale_colour_nejm()
 }
 
 #' @title Plot silhouette width on map
@@ -200,10 +202,10 @@ plt_clust_map <- \(pts, areas, clust_obj) {
 #' @return ggplot object
 #' @rdname plt_sil_map
 #' @export
-plt_sil_map <- \(pts, areas, sil_obj) {
+plt_sil_map <- \(pts, areas, sil_obj, medoids = NULL) {
 
   cluster <- sil_width <- NULL
-
+  
   # Create spatial points object w/ cluster membership and silhouette width
   sil_df <- sil_obj
   if (!inherits(sil_obj, "data.frame")) {
@@ -221,16 +223,45 @@ plt_sil_map <- \(pts, areas, sil_obj) {
     sil_df[, c("cluster", "sil_width")]
   ) |>
     dplyr::mutate(row = dplyr::row_number())
+  
+  # add medoids if desired
+  if (!is.null(medoids) && "name" %in% colnames(pts_plt)) {
+    pts_plt <- pts_plt |>
+        dplyr::mutate(
+          medoid = ifelse(name %in% medoids, TRUE, FALSE), 
+          medoid = factor(medoid, levels = c(FALSE, TRUE))
+        )
+  } 
 
-  ggplot2::ggplot(areas) +
-    ggplot2::geom_sf(colour = "black", fill = NA) +
-    ggplot2::geom_sf(
-      data = pts_plt,
-      ggplot2::aes(colour = factor(cluster), alpha = sil_width),
-      size = 5
-    ) +
-    ggplot2::labs(colour = "Cluster", alpha = "Silhouette width") +
-    evc_theme()
+  p <- ggplot2::ggplot(areas) +
+    ggplot2::geom_sf(colour = "black", fill = NA)
+  if ("medoid" %in% names(pts_plt)) {
+    p <- p + 
+      ggplot2::geom_sf(
+        data = pts_plt,
+        ggplot2::aes(
+          colour = factor(cluster), 
+          shape = medoid, 
+          size = as.numeric(medoid), 
+          alpha = sil_width
+        )
+      ) + 
+      ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
+      ggplot2::scale_size_continuous(range = c(4, 8)) +
+      ggplot2::guides(size = "none")
+  } else {
+    p <- p + 
+      ggplot2::geom_sf(
+        data = pts_plt,
+        ggplot2::aes(colour = factor(cluster), alpha = sil_width),
+        size = 5
+      )
+  }
+  p <- p + 
+    ggplot2::labs(colour = "Cluster", alpha = "Silhouette width") + 
+    evc_theme() + 
+    ggsci::scale_colour_nejm()
+  return(p)
 }
 
 #' @title `ggpplot2` plotting theme
