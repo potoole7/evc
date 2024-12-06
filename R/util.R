@@ -156,9 +156,12 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   } else if (inherits(clust_obj, "pam")) {
     clust_element <- "clustering"
     medoids <- clust_obj$medoids
-    if (!is.null(rownames(medoids))) {
+    medoid_locs <- NA
+    if (inherits(clust_obj$medoids, "character")) {
+      medoid_locs <- medoids
+    } else if (!is.null(rownames(medoids))) {
       medoid_locs <- rownames(medoids)
-    } else medoid_locs <- NA
+    }
   } else {
     stop("Clustering class not currently supported")
   }
