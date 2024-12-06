@@ -62,7 +62,7 @@ js_clust <- \(
         method     = js_div,
         thresh_max = thresh_max,
         data_max   = dat_max_mult * thresh_max,
-        n_dat      = n_dat
+        n_dat      = n_dat, upper = TRUE
       )
     }
     
@@ -79,13 +79,16 @@ js_clust <- \(
     # if not parallelising distance computation (reserved for high # locations)
     if (par_dist == FALSE) {
       dist_mats <- loop_fun(seq_along(params), \(i) {
-        dist_chunk(
+        mat <- dist_chunk(
           seq_len(length(params[[i]])), # don't chunk
           params[[i]], 
           thresh_max[[i]], 
           dat_max_mult, 
           n_dat
         )
+        # convert from crossidst to dist object
+        class(mat) <- "matrix"
+        return(as.dist(mat))
       })
     # if paralleling distance computation, need to split into chunks
     } else {
@@ -106,7 +109,7 @@ js_clust <- \(
       
       # Compute distances in parallel
       dist_mats <- lapply(seq_along(params), \(i) {
-        do.call(rbind, parallel::parLapply(cl, chunks, \(chunk_idx) {
+        mat <- do.call(rbind, parallel::parLapply(cl, chunks, \(chunk_idx) {
           dist_chunk(
             chunk_idx, 
             lst = params[[i]], 
@@ -115,6 +118,9 @@ js_clust <- \(
             n_dat = n_dat
           )
         }))
+        # convert from cross.dist to dist
+        class(mat) <- "matrix"
+        return(as.dist(mat))
       })
       parallel::stopCluster(cl) # stop cluster
     }
