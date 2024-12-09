@@ -1,3 +1,9 @@
+# evc 0.2.2
+
+- `fit_ce` now works with use of "ordinary" `texmex::migpd`, as well as 
+`evgam::evgam` for fitting the marginal component of the conditional extremes 
+model.
+
 # evc 0.2.1
 
 - `fit_ce` and `js_clust` now can optionally be run in parallel using 
