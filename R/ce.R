@@ -132,7 +132,6 @@ fit_ce <- \(
             dplyr::slice(1) |>
             dplyr::pull(thresh)
         }, numeric(1))
-        print(mth)
         texmex::migpd(as.matrix(x[, vars]), mth = mth)
       })
   # Now fit evgam model for each marginal
