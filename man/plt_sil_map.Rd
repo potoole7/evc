@@ -4,7 +4,7 @@
 \alias{plt_sil_map}
 \title{Plot silhouette width on map}
 \usage{
-plt_sil_map(pts, areas, sil_obj)
+plt_sil_map(pts, areas, sil_obj, medoids = NULL)
 }
 \arguments{
 \item{pts}{Spatial points object}
@@ -12,6 +12,8 @@ plt_sil_map(pts, areas, sil_obj)
 \item{areas}{Spatial polygons object}
 
 \item{sil_obj}{silhouette object}
+
+\item{medoids}{Medoid names, Default: NULL.}
 }
 \value{
 ggplot object

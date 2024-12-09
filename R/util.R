@@ -148,7 +148,7 @@ sil_boxplot <- function(
 # TODO: Could make this plot/ggplot method for object
 plt_clust_map <- \(pts, areas, clust_obj) {
 
-  clust <- mediod <- NULL
+  name <- clust <- medoid <- NULL
 
   if (inherits(clust_obj, "kmeans")) {
     clust_element <- "cluster"
@@ -192,7 +192,7 @@ plt_clust_map <- \(pts, areas, clust_obj) {
     ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
     ggplot2::scale_size_continuous(range = c(4, 8)) +
     ggplot2::guides(shape = "none", size = "none") +
-    labs(colour = "Cluster") + 
+    ggplot2::labs(colour = "Cluster") + 
     evc_theme() + 
     ggsci::scale_colour_nejm()
 }
@@ -202,12 +202,13 @@ plt_clust_map <- \(pts, areas, clust_obj) {
 #' @param pts Spatial points object
 #' @param areas Spatial polygons object
 #' @param sil_obj silhouette object
+#' @param medoids Medoid names, Default: NULL.
 #' @return ggplot object
 #' @rdname plt_sil_map
 #' @export
 plt_sil_map <- \(pts, areas, sil_obj, medoids = NULL) {
 
-  cluster <- sil_width <- NULL
+  name <- medoid <- cluster <- sil_width <- NULL
   
   # Create spatial points object w/ cluster membership and silhouette width
   sil_df <- sil_obj

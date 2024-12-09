@@ -88,7 +88,7 @@ js_clust <- \(
         )
         # convert from crossidst to dist object
         class(mat) <- "matrix"
-        return(as.dist(mat))
+        return(stats::as.dist(mat))
       })
     # if paralleling distance computation, need to split into chunks
     } else {
@@ -120,7 +120,7 @@ js_clust <- \(
         }))
         # convert from cross.dist to dist
         class(mat) <- "matrix"
-        return(as.dist(mat))
+        return(stats::as.dist(mat))
       })
       parallel::stopCluster(cl) # stop cluster
     }
