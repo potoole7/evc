@@ -77,14 +77,15 @@ fit_ce <- \(
     }))
     names(data_df)[seq_len(nvars)] <- vars
   } else {
-    data_df <- data
+    data_df <- as.data.frame(data)
+    names(data_df)[names(data_df) %in% paste0("V", seq_len(nvars))] <- vars
   }
 
   # must have names column, and all of vars must be columns in data_df
   stopifnot("Must have a `name` column" = "name" %in% names(data_df))
   stopifnot("All of `vars` must be in data" = all(vars %in% names(data_df)))
 
-  # First, calculate threshold (90th quantile across all locations)
+  # First, calculate threshold (marg_prob^(th) quantile across all locations)
   if (!is.list(marg_prob) && is.numeric(marg_prob)) {
     thresh <- apply(data_df[, c(vars)], 2, stats::quantile, marg_prob)
     # for each variable, calculate excess over threshold
@@ -98,9 +99,9 @@ fit_ce <- \(
         ) |>
         dplyr::filter(excess > 0)
     })
-  # If thresh is a list, assume it is arguments to quantile_thresh
-  # TODO: May be easier to just copy each vars column as response in data_df
-  # Would allow for simpler formula specification
+    # If thresh is a list, assume it is arguments to quantile_thresh
+    # TODO: May be easier to just copy each vars column as response in data_df
+    # Would allow for simpler formula specification
   } else if (is.list(marg_prob)) {
     data_thresh <- lapply(vars, \(x) {
       # Change formula to include response in question
@@ -110,8 +111,9 @@ fit_ce <- \(
       # Run `quantile_thresh` for each response with specified args
       do.call(
         quantile_thresh,
-        args = c(list(data = data_df, response = x), # data args
-        marg_prob
+        args = c(
+          list(data = data_df, response = x), # data args
+          marg_prob
         )
       )
     })
@@ -133,8 +135,20 @@ fit_ce <- \(
             dplyr::slice(1) |>
             dplyr::pull(thresh)
         }, numeric(1))
-        texmex::migpd(as.matrix(x[, vars]), mth = mth)
+        # texmex::migpd(as.matrix(x[, vars]), mth = mth)
+        gpd_fits <- lapply(seq_along(vars), \(i) {
+          fit <- ismev::gpd.fit(x[[vars[i]]], threshold = mth[i], show = FALSE)
+          return(list(
+            "sigma"     = fit$mle[1], 
+            "xi"        = fit$mle[2], 
+            "thresh"    = fit$threshold[[1]]
+          )) 
+        })
+        names(gpd_fits) <- vars
+        return(gpd_fits)
       })
+    names(marginal) <- unique(data_df$name)
+    
   # Now fit evgam model for each marginal
   } else {
     evgam_fit <- loop_fun(data_thresh, \(x) {
@@ -195,141 +209,37 @@ fit_ce <- \(
   names(marginal) <- unique(data_df$name)
 
   # Calculate dependence from marginals (default output object)
-  # TODO: Replace with our own conditional extremes implementation
-  # TODO: Also add evgam fits to this if fit
-  # ret <- fit_texmex_dep(
-  #   marginal     = marginal,
-  #   vars         = vars,
-  #   mex_dep_args = list(dqu = cond_prob),
-  #   fit_no_keef  = fit_no_keef,
-  #   loop_fun     = loop_fun
-  # )
+  # first, transform margins to Laplace
+  marginal_trans <- apply_fun(marginal, \(x) {
+    # semi-parametric CDF
+    F_hat <- semi_par(dplyr::select(data_df, dplyr::all_of(vars)), x)
+    # Laplace transform
+    Y <- laplace_trans(F_hat)
+    colnames(Y) <- vars
+    return(Y)
+  })
+  
+  # now fit dependence model
+  ret <- loop_fun(marginal_trans, \(x){
+    o <- ce_optim(
+      x,
+      dqu,
+      control = list(maxit = 1e6),
+      constrain = !fit_no_keef,
+    )
+    return(o)
+  })
 
   # output more than just dependence object, if desired
   if (output_all) {
     ret <- list(
       "thresh"     = data_thresh,
-      "evgam"      = evgam_fit,
       "marginal"   = marginal,
       "dependence" = ret
     )
+    if (exists("evgam_fit", envir = environment())) {
+      ret$evgam_fit <- evgam_fit
+    }
   }
   return(ret)
-}
-
-#' @title Generate marginal `migpd` objects
-#' @description Generate marginal `migpd` objects from `evgam` objects for each
-#' site.
-#' @param data_gpd Scale and shape parameters for each location.
-#' @param data Data for each location.
-#' @param vars Variable names for each location.
-#' @param loop_fun Function to loop through each location, Default: `lapply`.
-#' @return List of `migpd` objects for each location.
-#' @rdname gen_marg_migpd
-#' @export
-gen_marg_migpd <- \(data_gpd, data, vars, loop_fun = lapply) {
-
-  name <- NULL
-
-  # Create "dummy" migpd object to fill in with evgam values
-  dat_mat <- data |>
-    dplyr::filter(name == data$name[[1]]) |>
-    dplyr::select(dplyr::all_of(vars)) |>
-    as.matrix()
-
-  # create dummy `migpd` object, can replace key values with those in data_gpd
-  temp <- texmex::migpd(dat_mat, mqu = 0.9, penalty = "none")
-
-  # loop through each location
-  # jmarginal <- lapply(seq_len(nrow(data_gpd)), \(i) {
-  marginal <- loop_fun(seq_len(nrow(data_gpd)), \(i) {
-    # initialise
-    spec_marg <- temp
-    # replace data
-    spec_marg$data <- data |>
-      dplyr::filter(name == data_gpd$name[i]) |>
-      dplyr::select(dplyr::all_of(vars)) |>
-      as.matrix()
-
-    # replace thresholds and coefficients for each variable (for each location)
-    spec_marg$models <- lapply(seq_along(spec_marg$models), \(j) {
-      # replace thresholds for each variable
-      spec_mod <- spec_marg$models[[j]]
-      spec_mod$threshold <- data_gpd[[
-        paste0("thresh_", vars[j])
-      ]][[i]] # thresh may not be fixed quantile, so take row specific value
-
-      # replace coefficients for each variable
-      spec_mod$coefficients[1:2] <- c(
-        log(data_gpd[[paste0("scale_", vars[j])]][[i]]),
-        data_gpd[[paste0("shape_", vars[j])]][[i]]
-      )
-      class(spec_mod) <- "evmOpt"
-      return(spec_mod)
-    })
-    names(spec_marg$models) <- vars
-
-    return(spec_marg)
-  })
-  return(marginal)
-}
-
-#' @title Fit `texmex` dependence model
-#' @description Fit `texmex` dependence model for each site.
-#' @param marginal List of `migpd` objects for each site.
-#' @param vars Variables to fit dependence on.
-#' @param mex_dep_args Arguments to pass to \link[texmex]{mexDependence}.
-#' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
-#' @param loop_fun Function to loop through each location, Default: `lapply`.
-#' (see \link[texmex]{mexDependence} for details).
-#' @return List of `mexDependence` objects for each site.
-#' @rdname fit_texmex_dep
-#' @export
-fit_texmex_dep <- \(
-  marginal,
-  vars         = c("rain", "wind_speed"),
-  mex_dep_args = list(
-    start     = c(0.01, 0.01),
-    dqu       = 0.7,
-    fixed_b   = FALSE,
-    PlotLikDo = FALSE
-  ),
-  fit_no_keef  = FALSE,
-  loop_fun     = lapply
-) {
-
-  # dependence <- lapply(seq_along(marginal), \(i) {
-  dependence <- loop_fun(seq_along(marginal), \(i) {
-    # fit for rain and wind speed
-    ret <- lapply(vars, \(col) {
-      mod <- do.call(
-        texmex::mexDependence,
-        args = c(list(x = marginal[[i]], which = col), mex_dep_args)
-      )
-
-      # if model didn't optimise with Keef 2013 constrains, return NA
-      ll <- mod$dependence$loglik
-      if (any(is.na(ll)) || any(abs(ll) > 1e9)) {
-        system(sprintf(
-          'echo "%s"', "Model not fitting properly under Keef constraints"
-        ))
-        if (fit_no_keef) {
-          mod <- do.call(
-            texmex::mexDependence,
-            args = c(
-              list(x = marginal[[i]], which = col, constrain = FALSE),
-              mex_dep_args
-            )
-          )
-        } else {
-          return(NA)
-        }
-      }
-      return(mod)
-    })
-    names(ret) <- vars
-    return(ret)
-  })
-  names(dependence) <- names(marginal)
-  return(dependence)
 }
