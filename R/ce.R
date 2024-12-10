@@ -51,7 +51,7 @@ fit_ce <- \(
       ))
     }
   }
-  
+
   # Parallel setup
   apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
   ext_args <- NULL
@@ -61,7 +61,7 @@ fit_ce <- \(
   loop_fun <- \(...) {
     do.call(apply_fun, c(list(...), ext_args))
   }
-  
+
   # number of variables
   nvars <- length(vars)
 
@@ -123,7 +123,7 @@ fit_ce <- \(
   # If f NULL, fit ordinary marginal models with `texmex::migpd`
   if (is.null(f)) {
     # calculate marginal fits for all locations
-    marginal <- data_df |> 
+    marginal <- data_df |>
       dplyr::group_split(name) |>
       loop_fun(\(x) {
         # pull marginal thresholds
@@ -144,13 +144,13 @@ fit_ce <- \(
         f = f # formula to use in evgam::evgam, specified arg above
       )
     })
-  
+
     # Join scale and shape estimates into data
     # pull variables specified as predictors in f
     preds <- unique(as.vector(unlist(lapply(
       evgam_fit, \(x) x$m$predictor.names
     ))))
-  
+
     # add predictions of scale and shape parameters for each variable
     data_df_wide <- data_df |>
       dplyr::bind_cols(
@@ -163,7 +163,7 @@ fit_ce <- \(
             )
         })
       )
-  
+
     # add thresholds and number of exceedances for each predictor combination
     # TODO: Replace for loop somehow?
     data_df_wide_join <- data_df_wide
@@ -180,7 +180,7 @@ fit_ce <- \(
           by = preds # predictors supplied to evgam formula
         )
     }
-  
+
     data_gpd <- data_df_wide_join |>
       # fill in NAs (indicating no exceedances) with 0
       dplyr::mutate(
@@ -188,9 +188,9 @@ fit_ce <- \(
       ) |>
       # must have unique rows to loop through in `gen_marg_migpd`
       dplyr::distinct(name, .keep_all = TRUE)
-  
+
     # Now convert marginals to migpd (i.e. texmex format)
-    marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)  
+    marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)
   }
   names(marginal) <- unique(data_df$name)
 
@@ -201,7 +201,7 @@ fit_ce <- \(
     marginal     = marginal,
     vars         = vars,
     mex_dep_args = list(dqu = cond_prob),
-    fit_no_keef  = fit_no_keef, 
+    fit_no_keef  = fit_no_keef,
     loop_fun     = loop_fun
   )
 
@@ -378,7 +378,7 @@ fit_texmex_dep <- \(
     fixed_b   = FALSE,
     PlotLikDo = FALSE
   ),
-  fit_no_keef  = FALSE, 
+  fit_no_keef  = FALSE,
   loop_fun     = lapply
 ) {
 
