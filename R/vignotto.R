@@ -131,6 +131,7 @@ emp_kl_div <- \(x, y, prob = 0.9) {
 pareto_trans <- \(x) {
   stopifnot(is.vector(x))
 
+  # TODO: Create separate function to calculate ECDf, used often
   # order and sort data
   x_ord <- order(x)
   x_sort <- x[x_ord]

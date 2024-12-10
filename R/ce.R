@@ -118,6 +118,7 @@ fit_ce <- \(
   } else {
     stop("marg_prob must be numeric or arguments to `quantile_thresh`")
   }
+  # TODO: Add warning if number of locations after thresholding is lower
 
   # If f NULL, fit ordinary marginal models with `texmex::migpd`
   if (is.null(f)) {
@@ -195,6 +196,7 @@ fit_ce <- \(
 
   # Calculate dependence from marginals (default output object)
   # TODO: Replace with our own conditional extremes implementation
+  # TODO: Also add evgam fits to this if fit
   ret <- fit_texmex_dep(
     marginal     = marginal,
     vars         = vars,
