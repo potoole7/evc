@@ -78,16 +78,22 @@ fit_ce <- \(
     names(data_df)[seq_len(nvars)] <- vars
   } else {
     data_df <- as.data.frame(data)
+    # convert matrix names if required
     names(data_df)[names(data_df) %in% paste0("V", seq_len(nvars))] <- vars
   }
 
   # must have names column, and all of vars must be columns in data_df
   stopifnot("Must have a `name` column" = "name" %in% names(data_df))
   stopifnot("All of `vars` must be in data" = all(vars %in% names(data_df)))
+  
+  # locations
+  locs <- unique(data_df$name)
 
   # First, calculate threshold (marg_prob^(th) quantile across all locations)
   if (!is.list(marg_prob) && is.numeric(marg_prob)) {
-    thresh <- apply(data_df[, c(vars)], 2, stats::quantile, marg_prob)
+    thresh <- apply(
+      data_df[, c(vars)], 2, stats::quantile, marg_prob, na.rm = TRUE
+    )
     # for each variable, calculate excess over threshold
     data_thresh <- lapply(vars, \(x) {
       data_df |>
@@ -105,7 +111,8 @@ fit_ce <- \(
   } else if (is.list(marg_prob)) {
     data_thresh <- lapply(vars, \(x) {
       # Change formula to include response in question
-      marg_prob$f <- lapply(marg_prob$f, \(f_spec) {
+      spec_params <- marg_prob
+      spec_params$f <- lapply(marg_prob$f, \(f_spec) {
         stats::formula(stringr::str_replace_all(f_spec, "response", x))
       })
       # Run `quantile_thresh` for each response with specified args
@@ -113,7 +120,7 @@ fit_ce <- \(
         quantile_thresh,
         args = c(
           list(data = data_df, response = x), # data args
-          marg_prob
+          spec_params
         )
       )
     })
@@ -122,7 +129,7 @@ fit_ce <- \(
   }
   # TODO: Add warning if number of locations after thresholding is lower
 
-  # If f NULL, fit ordinary marginal models with `texmex::migpd`
+  # If f NULL, fit ordinary marginal models with `ismev::gpd.fit` for each loc
   if (is.null(f)) {
     # calculate marginal fits for all locations
     marginal <- data_df |>
@@ -147,7 +154,6 @@ fit_ce <- \(
         names(gpd_fits) <- vars
         return(gpd_fits)
       })
-    names(marginal) <- unique(data_df$name)
     
   # Now fit evgam model for each marginal
   } else {
@@ -158,72 +164,102 @@ fit_ce <- \(
         f = f # formula to use in evgam::evgam, specified arg above
       )
     })
+    
+    # pull scale and shape for each variable 
+    marginal <- lapply(seq_along(evgam_fit), \(i) {
+      
+      thresh <- unique(data_thresh[[i]]$thresh)
+      if (length(thresh) < length(unique(data_df$name))) {
+        loc_missing <- setdiff(data_df$name, data_thresh[[i]]$name)
+        message(paste(
+          "No exceedances for variable", vars[[i]], "at locations:",
+          paste(loc_missing, collapse = ", ")
+        ))
+      }
+      
+      # pull for each location (or predictor combination)
+      params <- dplyr::distinct(
+        evgam_fit[[i]]$predictions, sigma = scale, xi = shape
+      ) |>
+        dplyr::mutate(thresh = thresh) |>
+        dplyr::group_split(dplyr::row_number(), .keep = FALSE) |>
+        lapply(as.vector, mode = "list")
+    })
+    names(marginal) <- vars
+    
+    # transpose list from variables -> locations to locations -> variables
+    marginal <- purrr::transpose(marginal)
 
     # Join scale and shape estimates into data
     # pull variables specified as predictors in f
-    preds <- unique(as.vector(unlist(lapply(
-      evgam_fit, \(x) x$m$predictor.names
-    ))))
-
-    # add predictions of scale and shape parameters for each variable
-    data_df_wide <- data_df |>
-      dplyr::bind_cols(
-        # for each variable, take predictions for scale + shape, rename
-        lapply(seq_along(evgam_fit), \(i) {
-          evgam_fit[[i]]$predictions |>
-            dplyr::rename(
-              !!paste0("scale_", vars[[i]]) := scale,
-              !!paste0("shape_", vars[[i]]) := shape
-            )
-        })
-      )
-
-    # add thresholds and number of exceedances for each predictor combination
-    # TODO: Replace for loop somehow?
-    data_df_wide_join <- data_df_wide
-    for (i in seq_len(nvars)) {
-      data_df_wide_join <- data_df_wide_join |>
-        dplyr::left_join(
-          data_thresh[[i]] |>
-            dplyr::mutate(thresh = round(thresh, 3)) |>
-            dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
-            dplyr::rename(
-              !!paste0("n_", vars[[i]]) := n,
-              !!paste0("thresh_", vars[[i]]) := thresh
-            ),
-          by = preds # predictors supplied to evgam formula
-        )
-    }
-
-    data_gpd <- data_df_wide_join |>
-      # fill in NAs (indicating no exceedances) with 0
-      dplyr::mutate(
-        dplyr::across(dplyr::starts_with("n_"), ~ifelse(is.na(.), 0, .))
-      ) |>
-      # must have unique rows to loop through in `gen_marg_migpd`
-      dplyr::distinct(name, .keep_all = TRUE)
+    # preds <- unique(as.vector(unlist(lapply(
+    #   evgam_fit, \(x) x$m$predictor.names
+    # ))))
+    # 
+    # # add predictions of scale and shape parameters for each variable
+    # data_df_wide <- data_df |>
+    #   dplyr::bind_cols(
+    #     # for each variable, take predictions for scale + shape, rename
+    #     lapply(seq_along(evgam_fit), \(i) {
+    #       evgam_fit[[i]]$predictions |>
+    #         dplyr::rename(
+    #           !!paste0("scale_", vars[[i]]) := scale,
+    #           !!paste0("shape_", vars[[i]]) := shape
+    #         )
+    #     })
+    #   )
+    # 
+    # # add thresholds and number of exceedances for each predictor combination
+    # # TODO: Replace for loop somehow?
+    # data_df_wide_join <- data_df_wide
+    # for (i in seq_len(nvars)) {
+    #   data_df_wide_join <- data_df_wide_join |>
+    #     dplyr::left_join(
+    #       data_thresh[[i]] |>
+    #         dplyr::mutate(thresh = round(thresh, 3)) |>
+    #         dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
+    #         dplyr::rename(
+    #           !!paste0("n_", vars[[i]]) := n,
+    #           !!paste0("thresh_", vars[[i]]) := thresh
+    #         ),
+    #       by = preds # predictors supplied to evgam formula
+    #     )
+    # }
+# 
+    # data_gpd <- data_df_wide_join |>
+    #   # fill in NAs (indicating no exceedances) with 0
+    #   dplyr::mutate(
+    #     dplyr::across(dplyr::starts_with("n_"), ~ifelse(is.na(.), 0, .))
+    #   ) |>
+    #   # must have unique rows to loop through in `gen_marg_migpd`
+    #   dplyr::distinct(name, .keep_all = TRUE)
 
     # Now convert marginals to migpd (i.e. texmex format)
     # marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)
   }
-  names(marginal) <- unique(data_df$name)
+  names(marginal) <- locs
 
   # Calculate dependence from marginals (default output object)
   # first, transform margins to Laplace
-  marginal_trans <- apply_fun(marginal, \(x) {
+  # browser()
+  marginal_trans <- lapply(seq_along(marginal), \(i) {
     # semi-parametric CDF
-    F_hat <- semi_par(dplyr::select(data_df, dplyr::all_of(vars)), x)
+    F_hat <- data_df |>
+      dplyr::filter(name == locs[i]) |>
+      dplyr::select(dplyr::all_of(vars)) |>
+      semi_par(marginal[[i]])
     # Laplace transform
     Y <- laplace_trans(F_hat)
     colnames(Y) <- vars
     return(Y)
   })
+  names(marginal_trans) <- locs
   
   # now fit dependence model
   ret <- loop_fun(marginal_trans, \(x){
     o <- ce_optim(
       x,
-      dqu,
+      cond_prob,
       control = list(maxit = 1e6),
       constrain = !fit_no_keef,
     )
@@ -231,11 +267,13 @@ fit_ce <- \(
   })
 
   # output more than just dependence object, if desired
+  # TODO: Return data + transformed data for inspection?
   if (output_all) {
     ret <- list(
-      "thresh"     = data_thresh,
-      "marginal"   = marginal,
-      "dependence" = ret
+      "thresh"      = data_thresh,
+      "marginal"    = marginal,
+      "transformed" = marginal_trans,
+      "dependence"  = ret
     )
     if (exists("evgam_fit", envir = environment())) {
       ret$evgam_fit <- evgam_fit
