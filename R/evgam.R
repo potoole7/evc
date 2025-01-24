@@ -31,7 +31,7 @@ quantile_thresh <- function(
   if (jitter == TRUE) {
     data <- data |>
       dplyr::mutate(dplyr::across(
-        dplyr::all_of(response), ~ . + stats::rnorm(n(), 0, 1e-6)
+        dplyr::all_of(response), ~ . + stats::rnorm(dplyr::n(), 0, 1e-6)
       ))
   }
 
@@ -39,13 +39,20 @@ quantile_thresh <- function(
   ald_fit <- evgam::evgam(
     f, data, family = "ald", ald.args = list(tau = tau)
   )
+  
+  # make predictions on distinct predictors
+  predictors <- ald_fit$predictor.names
+  data_distinct <- data |>
+    dplyr::distinct(dplyr::across(dplyr::all_of(predictors)))
+  predictions <- cbind(
+    data_distinct, 
+    "thresh" = stats::predict(ald_fit, data_distinct)$location
+  )
 
   # add threshold to data
   data_thresh <- data |>
-    dplyr::mutate(
-      thresh = stats::predict(ald_fit)$location,
-      excess = !!rlang::sym(response) - thresh
-    )
+    dplyr::left_join(predictions, by = predictors) |>
+    dplyr::mutate(excess = !!rlang::sym(response) - thresh)
   # threshold if desired
   if (thresh == TRUE) {
     data_thresh <- dplyr::filter(data_thresh, excess > 0)
@@ -73,9 +80,15 @@ fit_evgam <- \(
 ) {
   # fit evgam model
   m <- evgam::evgam(f, data = data, family = "gpd")
-
-  # create predictions
-  predictions <- stats::predict(m, pred_data, type = "response")
+  
+  # create predictions for unique rows in pred_data (ensures one pred per loc)
+  predictors <- m$predictor.names
+  pred_dat_distinct <- pred_data |>
+    dplyr::distinct(dplyr::across(dplyr::all_of(predictors)))
+  predictions <- cbind(
+    pred_dat_distinct, 
+    stats::predict(m, pred_dat_distinct, type = "response")
+  )
 
   # return model fit and predictions
   return(list(

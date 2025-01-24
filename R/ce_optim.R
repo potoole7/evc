@@ -2,7 +2,7 @@
 
 #### Marginal Transformation ####
 
-# TODO: Document
+# TODO: Document these functions
 # Semiparametric CDF
 semi_par <- \(dat, gpd, n = nrow(dat)) {
   # As in Heff & Tawn '04, semiparametric mod uses ecdf below thresh, GPD above
@@ -12,19 +12,19 @@ semi_par <- \(dat, gpd, n = nrow(dat)) {
     spec_sigma <- gpd[[i]][[1]]
     spec_xi <- gpd[[i]][[2]]
     spec_loc <- gpd[[i]][[3]]
-
+    
     # TODO: Replace with ecdf fun from evc
     # order and sort data
     dat_spec_ord <- order(dat_spec)
     dat_spec_sort <- dat_spec[dat_spec_ord]
-
+    
     # calculate ECDF
     m <- length(dat_spec)
     ecdf_vals <- (seq_len(m)) / (m + 1)
     # convert back to original order
     ecdf_dat_ord <- numeric(m)
     ecdf_dat_ord[dat_spec_ord] <- ecdf_vals
-
+    
     # initialise
     cdf <- numeric(n)
     # ecdf (i.e. non-parametric) below threshold
@@ -37,15 +37,19 @@ semi_par <- \(dat, gpd, n = nrow(dat)) {
     )^(-1 / spec_xi)
     # TODO: texmex uses different formulation to H&T, investigate
     # cdf[dat[, i] > spec_loc] <- 1 - (1 - ecdf_spec_loc) * para
-    cdf[dat[, i] > spec_loc] <- 1 - mean(dat_spec > spec_loc) * para
+    cdf[dat[, i] > spec_loc] <- 1 - (mean(dat_spec > spec_loc) * para)
     return(cdf)
   }, FUN.VALUE = numeric(n)))
 }
 
 # transform to Laplace margins
-laplace_trans <- \(F_hat) {
-  apply(F_hat, 2, \(x) ifelse(x < 0.5, log(2 * x), -log(2 * (1 - x))))
+laplace_trans <- \(F_hat, tol = .Machine$double.eps) {
+  apply(F_hat, 2, \(x) {
+    y <- pmin(pmax(x, tol), 1 - tol) 
+    return(ifelse(y < 0.5, log(2 * y), -log(2 * (1 - y))))
+  })
 }
+
 
 ##### MLE ####
 
@@ -84,7 +88,7 @@ ConstraintsAreSatisfied <- \(a, b, z, zpos, zneg, v) {
     (1 + a)^(-b / (1 - b)) - max(zneg) > 0
 
   if (any(is.na(c(C1e, C1o, C2e, C2o)))) {
-    warning("Strayed into impossible area of parameter space")
+    message("Strayed into impossible area of parameter space")
     C1e <- C1o <- C2e <- C2o <- FALSE
   }
 
@@ -97,7 +101,7 @@ laplace_nll <- \(yex, ydep, a, b, m, s, constrain, v, aLow) {
   WeeNumber <- 10^(-10)
 
   # give large value if parameters are out of bounds
-  if (a < aLow[1] | s < WeeNumber | a > 1 - WeeNumber | b > 1 - WeeNumber) {
+  if (a < aLow | s < WeeNumber | a > 1 - WeeNumber | b > 1 - WeeNumber) {
     res <- BigNumber
   } else {
     # Assuming normal distribution for excesses, calculate mean & sd
@@ -137,7 +141,7 @@ laplace_npll <- function(yex, ydep, a, b, constrain, v, aLow) {
   )
   # estimate nuisance parameters
   m <- mean(Z)
-  s <- sd(Z)
+  s <- stats::sd(Z)
 
   # now estimate a and b
   res <- laplace_nll(
@@ -167,10 +171,18 @@ ce_optim <- \(
   v = 10,
   aLow = -1
 ) {
+  
+  # object to return if we find an error
+  err_obj <- as.matrix(c("a" = NA, "b" = NA, "m" = NA, "s" = NA))
+  
   # optimise for a single variable vs another
   single_optim <- \(yex, ydep) {
-    wch <- yex > quantile(yex, dqu)
-    o_single <- try(optim(
+    if (any(is.infinite(yex))) {
+      message("Inf values in Laplace transformed data, optimisation failed")
+      return(err_obj)
+    }
+    wch <- yex > stats::quantile(yex, dqu)
+    o_single <- try(stats::optim(
       par = start,
       fn = Qpos,
       control = control,
@@ -180,12 +192,20 @@ ce_optim <- \(
       v = v,
       aLow = aLow
     ), silent = TRUE)
+    if (inherits(o_single, "try-error")) {
+      message(paste("optimisation failed for constrain =", constrain))
+      return(err_obj)
+    }
+    # set to NA if no change from starting values
+    if (all(o_single$par[1:2] == start)) {
+      message("No change from starting values, optimisation failed")
+      return(err_obj)
+    }
     # calculate nuisance parameters from a and b estimates
-    if (!is.na(o_single$par[1])) {
+    if (all(!is.na(o_single$par))) {
       Z <- (ydep[wch] - yex[wch] * o_single$par[1]) /
         (yex[wch]^o_single$par[2])
-      o_single$par <- c(o_single$par[1:2], mean(Z), sd(Z))
-      names(o_single$par) <- c("a", "b", "m", "s")
+      o_single$par <- c(o_single$par[1:2], "m" = mean(Z), "s" = stats::sd(Z))
     }
     # TODO: Add checks afterwards on o
     return(o_single$par)
