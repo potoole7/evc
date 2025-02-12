@@ -181,7 +181,9 @@ ce_optim <- \(
       message("Inf values in Laplace transformed data, optimisation failed")
       return(err_obj)
     }
-    wch <- yex > stats::quantile(yex, dqu)
+    # threshold data
+    thresh <- stats::quantile(yex, dqu)
+    wch <- yex > thresh
     o_single <- try(stats::optim(
       par = start,
       fn = Qpos,
@@ -208,7 +210,7 @@ ce_optim <- \(
       o_single$par <- c(o_single$par[1:2], "m" = mean(Z), "s" = stats::sd(Z))
     }
     # TODO: Add checks afterwards on o
-    return(o_single$par)
+    return(c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]]))
   }
   names_y <- colnames(Y)
   # loop through variables, fit CE model against other variables
