@@ -169,13 +169,13 @@ fit_ce <- \(
     marginal <- lapply(seq_along(evgam_fit), \(i) {
       
       thresh <- unique(data_thresh[[i]]$thresh)
-      if (length(thresh) < length(unique(data_df$name))) {
-        loc_missing <- setdiff(data_df$name, data_thresh[[i]]$name)
-        message(paste(
-          "No exceedances for variable", vars[[i]], "at locations:",
-          paste(loc_missing, collapse = ", ")
-        ))
-      }
+      # if (length(thresh) < length(unique(data_df$name))) {
+      #   loc_missing <- setdiff(data_df$name, data_thresh[[i]]$name)
+      #   message(paste(
+      #     "No exceedances for variable", vars[[i]], "at locations:",
+      #     paste(loc_missing, collapse = ", ")
+      #   ))
+      # }
       
       # pull for each location (or predictor combination)
       params <- dplyr::distinct(
