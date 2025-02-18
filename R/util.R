@@ -66,7 +66,7 @@ within_cluster_sum <- function(k, distance_matrix, fun = cluster::pam, ...) {
 }
 
 #' @title Scree plot
-#' @description Produce scree plot
+#' @description Produce scree plot for TWGSS. 
 #' @param dist_mat Distance matrix
 #' @param k Number of clusters
 #' @param fun Clustering function
@@ -74,7 +74,8 @@ within_cluster_sum <- function(k, distance_matrix, fun = cluster::pam, ...) {
 #' @return Total within-cluster sum of distances
 #' @rdname scree_plot
 #' @export
-# TODO: Could make this object method
+# TODO Could make this object method
+# TODO Could expand this to work for AIC as well as TWGSS
 scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
   total_within_ss <- vapply(
     k, within_cluster_sum, dist_mat, fun = fun, ..., FUN.VALUE = numeric(1)
@@ -88,53 +89,6 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
     main = "Scree Plot"
   )
   return(total_within_ss)
-}
-
-#' @title Silhouette boxplot
-#' @description Produce boxplot of silhouette widths for different values of k.
-#' @param dist_mat Distance matrix
-#' @param k Number of clusters
-#' @param fun Clustering function, Default: `cluster::pam`
-#' @param show_plt Logical, whether to show plot
-#' @param ret_sil Logical, whether to return dataframe of silhouette values
-#' @param ... Additional arguments to clustering function
-#' @return ggplot object
-#' @rdname sil_boxplot
-#' @export
-sil_boxplot <- function(
-  dist_mat,
-  k = 2:10,
-  fun = cluster::pam,
-  show_plt = TRUE,
-  ret_sil = TRUE,
-  ...
-) {
-
-  sil_width <- NULL
-
-  k <- sort(k)
-  # calculate silhouette coefficients for different k, convert to df to plot
-  sil_df <- dplyr::bind_rows(lapply(k, \(x) {
-    data.frame(cluster::silhouette(fun(dist_mat, x, ...))) |>
-      dplyr::mutate(k = x)
-  }))
-  rownames(sil_df) <- NULL
-
-  # boxplot for different values of k
-  p <- ggplot2::ggplot(sil_df) +
-    ggplot2::geom_boxplot(ggplot2::aes(x = factor(k), y = sil_width)) +
-    ggplot2::labs(x = "k", y = "Silhouette coefficient") +
-    ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0.05)) +
-    evc_theme()
-  if (show_plt) {
-    p
-  }
-
-  ret <- p
-  if (ret_sil) {
-    ret <- list("plot" = p, "sil" = sil_df)
-  }
-  return(ret)
 }
 
 #' @title Plot clustering solution on map
@@ -195,77 +149,6 @@ plt_clust_map <- \(pts, areas, clust_obj) {
     ggplot2::labs(colour = "Cluster") + 
     evc_theme() + 
     ggsci::scale_colour_nejm()
-}
-
-#' @title Plot silhouette width on map
-#' @description Plot silhouette width for clustering solution on map.
-#' @param pts Spatial points object
-#' @param areas Spatial polygons object
-#' @param sil_obj silhouette object
-#' @param medoids Medoid names, Default: NULL.
-#' @return ggplot object
-#' @rdname plt_sil_map
-#' @export
-plt_sil_map <- \(pts, areas, sil_obj, medoids = NULL) {
-
-  name <- medoid <- cluster <- sil_width <- NULL
-  
-  # Create spatial points object w/ cluster membership and silhouette width
-  sil_df <- sil_obj
-  if (!inherits(sil_obj, "data.frame")) {
-    sil_df <- data.frame(sil_obj)
-  }
-
-  # give message if plot likely ordered incorrectly
-  if (!all(rownames(sil_df) == sort(rownames(sil_df)))) {
-    message("sil_df not in rowname order, plot may be incorrect")
-  }
-
-  # Spatial points object
-  pts_plt <- cbind(
-    pts,
-    sil_df[, c("cluster", "sil_width")]
-  ) |>
-    dplyr::mutate(row = dplyr::row_number())
-  
-  # add medoids if desired
-  if (!is.null(medoids) && "name" %in% colnames(pts_plt)) {
-    pts_plt <- pts_plt |>
-        dplyr::mutate(
-          medoid = ifelse(name %in% medoids, TRUE, FALSE), 
-          medoid = factor(medoid, levels = c(FALSE, TRUE))
-        )
-  } 
-
-  p <- ggplot2::ggplot(areas) +
-    ggplot2::geom_sf(colour = "black", fill = NA)
-  if ("medoid" %in% names(pts_plt)) {
-    p <- p + 
-      ggplot2::geom_sf(
-        data = pts_plt,
-        ggplot2::aes(
-          colour = factor(cluster), 
-          shape = medoid, 
-          size = as.numeric(medoid), 
-          alpha = sil_width
-        )
-      ) + 
-      ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
-      ggplot2::scale_size_continuous(range = c(4, 8)) +
-      ggplot2::guides(size = "none")
-  } else {
-    p <- p + 
-      ggplot2::geom_sf(
-        data = pts_plt,
-        ggplot2::aes(colour = factor(cluster), alpha = sil_width),
-        size = 5
-      )
-  }
-  p <- p + 
-    ggplot2::labs(colour = "Cluster", alpha = "Silhouette width") + 
-    evc_theme() + 
-    ggsci::scale_colour_nejm()
-  return(p)
 }
 
 #' @title `ggpplot2` plotting theme
