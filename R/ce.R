@@ -199,53 +199,6 @@ fit_ce <- \(
     
     # transpose list from variables -> locations to locations -> variables
     marginal <- purrr::transpose(marginal)
-
-    # Join scale and shape estimates into data
-    # pull variables specified as predictors in f
-    # preds <- unique(as.vector(unlist(lapply(
-    #   evgam_fit, \(x) x$m$predictor.names
-    # ))))
-    # 
-    # # add predictions of scale and shape parameters for each variable
-    # data_df_wide <- data_df |>
-    #   dplyr::bind_cols(
-    #     # for each variable, take predictions for scale + shape, rename
-    #     lapply(seq_along(evgam_fit), \(i) {
-    #       evgam_fit[[i]]$predictions |>
-    #         dplyr::rename(
-    #           !!paste0("scale_", vars[[i]]) := scale,
-    #           !!paste0("shape_", vars[[i]]) := shape
-    #         )
-    #     })
-    #   )
-    # 
-    # # add thresholds and number of exceedances for each predictor combination
-    # # TODO: Replace for loop somehow?
-    # data_df_wide_join <- data_df_wide
-    # for (i in seq_len(nvars)) {
-    #   data_df_wide_join <- data_df_wide_join |>
-    #     dplyr::left_join(
-    #       data_thresh[[i]] |>
-    #         dplyr::mutate(thresh = round(thresh, 3)) |>
-    #         dplyr::count(dplyr::across(dplyr::all_of(preds)), thresh) |>
-    #         dplyr::rename(
-    #           !!paste0("n_", vars[[i]]) := n,
-    #           !!paste0("thresh_", vars[[i]]) := thresh
-    #         ),
-    #       by = preds # predictors supplied to evgam formula
-    #     )
-    # }
-    # 
-    # data_gpd <- data_df_wide_join |>
-    #   # fill in NAs (indicating no exceedances) with 0
-    #   dplyr::mutate(
-    #     dplyr::across(dplyr::starts_with("n_"), ~ifelse(is.na(.), 0, .))
-    #   ) |>
-    #   # must have unique rows to loop through in `gen_marg_migpd`
-    #   dplyr::distinct(name, .keep_all = TRUE)
-
-    # Now convert marginals to migpd (i.e. texmex format)
-    # marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)
   }
   names(marginal) <- locs_keep
   
