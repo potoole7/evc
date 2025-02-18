@@ -130,7 +130,7 @@ fit_ce <- \(
       if (length(thresh_locs) < length(locs)) {
         loc_missing <- setdiff(locs, thresh_locs)
         message(paste0(
-          "No exceedances for variable ", x, "at: ",
+          "No exceedances for variable ", x, " at: ",
           paste(loc_missing, collapse = ", "), 
           ", removing for all variables"
         ))
