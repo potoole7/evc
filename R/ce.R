@@ -1,8 +1,8 @@
 #### Functions for fitting Conditional Extremes model ####
 
-# TODO: Extend to more than 2 variables
-# TODO: Write tests for functions
-# TODO: Allow use of base `texmex` with `fit_ce`
+# TODO Write tests for functions
+# TODO Add silence option for messages
+# TODO Separate/decouple marginal and dependence fitting funs as in `texmex`
 
 #' @title Fit Conditional Extremes model
 #' @description Fit Conditional Extremes model using marginal fits form `evgam`.
@@ -97,7 +97,7 @@ fit_ce <- \(
     # for each variable, calculate excess over threshold
     data_thresh <- lapply(vars, \(x) {
       data_df |>
-        # remote other responses, will be joined together after
+        # remove other responses, will be joined together after
         dplyr::select(-dplyr::matches(vars[vars != x])) |>
         dplyr::mutate(
           thresh = thresh[x],
@@ -115,19 +115,37 @@ fit_ce <- \(
       spec_params$f <- lapply(marg_prob$f, \(f_spec) {
         stats::formula(stringr::str_replace_all(f_spec, "response", x))
       })
+      
       # Run `quantile_thresh` for each response with specified args
-      do.call(
+      ret <- do.call(
         quantile_thresh,
         args = c(
           list(data = data_df, response = x), # data args
           spec_params
         )
       )
+      
+      # return message where no exceedances are observed for any locations
+      thresh_locs <- unique(ret$name)
+      if (length(thresh_locs) < length(locs)) {
+        loc_missing <- setdiff(locs, thresh_locs)
+        message(paste(
+          "No exceedances for variable", x, "at:",
+          paste(loc_missing, collapse = ", "), 
+          ", removing for all variables"
+        ))
+      }
+      return(ret)
     })
   } else {
     stop("marg_prob must be numeric or arguments to `quantile_thresh`")
   }
-  # TODO: Add warning if number of locations after thresholding is lower
+  # Only keep locs with exceedances for all vars, otherwise can't do CE!
+  locs_keep <- Reduce(intersect, lapply(data_thresh, \(x) unique(x$name)))
+  data_df <- dplyr::filter(data_df, name %in% locs_keep)
+  data_thresh <- lapply(data_thresh, \(x)
+    dplyr::filter(x, name %in% locs_keep)
+  )
 
   # If f NULL, fit ordinary marginal models with `ismev::gpd.fit` for each loc
   if (is.null(f)) {
@@ -155,7 +173,7 @@ fit_ce <- \(
         return(gpd_fits)
       })
     
-  # Now fit evgam model for each marginal
+  # fit evgam model for each marginal
   } else {
     evgam_fit <- loop_fun(data_thresh, \(x) {
       fit_evgam(
@@ -165,23 +183,15 @@ fit_ce <- \(
       )
     })
     
-    # pull scale and shape for each variable 
+    # pull scale, shape and threshold for each variable 
     marginal <- lapply(seq_along(evgam_fit), \(i) {
       
-      thresh <- unique(data_thresh[[i]]$thresh)
-      # if (length(thresh) < length(unique(data_df$name))) {
-      #   loc_missing <- setdiff(data_df$name, data_thresh[[i]]$name)
-      #   message(paste(
-      #     "No exceedances for variable", vars[[i]], "at locations:",
-      #     paste(loc_missing, collapse = ", ")
-      #   ))
-      # }
-      
-      # pull for each location (or predictor combination)
+      # pull for each location (or predictor combo)
       params <- dplyr::distinct(
         evgam_fit[[i]]$predictions, sigma = scale, xi = shape
       ) |>
-        dplyr::mutate(thresh = thresh) |>
+        # TODO Assumes threshs in same order as evgam preds, may lead to bugs
+        dplyr::mutate(thresh = unique(data_thresh[[i]]$thresh)) |>
         dplyr::group_split(dplyr::row_number(), .keep = FALSE) |>
         lapply(as.vector, mode = "list")
     })
@@ -225,7 +235,7 @@ fit_ce <- \(
     #       by = preds # predictors supplied to evgam formula
     #     )
     # }
-# 
+    # 
     # data_gpd <- data_df_wide_join |>
     #   # fill in NAs (indicating no exceedances) with 0
     #   dplyr::mutate(
@@ -237,15 +247,14 @@ fit_ce <- \(
     # Now convert marginals to migpd (i.e. texmex format)
     # marginal <- gen_marg_migpd(data_gpd, data_df, vars, loop_fun = loop_fun)
   }
-  names(marginal) <- locs
-
+  names(marginal) <- locs_keep
+  
   # Calculate dependence from marginals (default output object)
   # first, transform margins to Laplace
-  # browser()
   marginal_trans <- lapply(seq_along(marginal), \(i) {
     # semi-parametric CDF
     F_hat <- data_df |>
-      dplyr::filter(name == locs[i]) |>
+      dplyr::filter(name == locs_keep[i]) |>
       dplyr::select(dplyr::all_of(vars)) |>
       semi_par(marginal[[i]])
     # Laplace transform
@@ -253,7 +262,7 @@ fit_ce <- \(
     colnames(Y) <- vars
     return(Y)
   })
-  names(marginal_trans) <- locs
+  names(marginal_trans) <- locs_keep
   
   # now fit dependence model
   ret <- loop_fun(marginal_trans, \(x){
