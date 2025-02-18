@@ -177,9 +177,9 @@ fit_ce <- \(
   } else {
     evgam_fit <- loop_fun(data_thresh, \(x) {
       fit_evgam(
-        data = x,
+        data      = x,
         pred_data = data_df,
-        f = f # formula to use in evgam::evgam, specified arg above
+        f         = f 
       )
     })
     
