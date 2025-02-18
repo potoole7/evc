@@ -78,6 +78,8 @@ fit_evgam <- \(
     ~ s(lon, lat, k = 40) # shape parameter
   )
 ) {
+  # ensure f is a formula
+  f <- lapply(f, stats::formula)
   # fit evgam model
   m <- evgam::evgam(f, data = data, family = "gpd")
   
