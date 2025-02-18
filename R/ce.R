@@ -129,8 +129,8 @@ fit_ce <- \(
       thresh_locs <- unique(ret$name)
       if (length(thresh_locs) < length(locs)) {
         loc_missing <- setdiff(locs, thresh_locs)
-        message(paste(
-          "No exceedances for variable", x, "at:",
+        message(paste0(
+          "No exceedances for variable ", x, "at: ",
           paste(loc_missing, collapse = ", "), 
           ", removing for all variables"
         ))
@@ -274,9 +274,18 @@ fit_ce <- \(
     )
     return(o)
   })
+  
+  # check that all dependence models have run successfully, message if not
+  locs_fail <- locs_keep[vapply(ret, \(x) any(is.na(unlist(x))), logical(1))]
+  if (length(locs_fail) > 0) {
+    message(paste0(
+      length(locs_fail), 
+      " locations failed to fit CE model for at least one variable: ",
+      paste(locs_fail, collapse = ", ")
+    ))  
+  }
 
   # output more than just dependence object, if desired
-  # TODO: Return data + transformed data for inspection?
   if (output_all) {
     ret <- list(
       "thresh"      = data_thresh,
