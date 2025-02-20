@@ -174,13 +174,27 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   # }
 
   # TODO: Medoids doesn#t work as rows are named, fix!
-  pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_element]])) |>
+  # pts_plt <- cbind(pts, data.frame("clust" = clust_obj[[clust_elementement]])) |>
+  #   dplyr::mutate(
+  #     medoid = ifelse(name %in% medoid_locs, TRUE, FALSE), 
+  #     medoid = factor(medoid, levels = c(FALSE, TRUE))
+  #   )
+  
+  # extract cluster membership for each site
+  clust_df <- tibble(
+    "name" = names(clust_obj[[clust_element]]), 
+    "clust" = clust_obj[[clust_element]]
+  )
+  # join to location data
+  pts_plt <- pts |>
+    left_join(clust_df, by = "name") |>
     dplyr::mutate(
       medoid = ifelse(name %in% medoid_locs, TRUE, FALSE), 
       medoid = factor(medoid, levels = c(FALSE, TRUE))
     )
   
-  ggplot2::ggplot(areas) +
+  # plot locations on map, colouring by cluster
+  p <- ggplot2::ggplot(areas) +
     ggplot2::geom_sf(colour = "black", fill = NA) +
     ggplot2::geom_sf(
       data = pts_plt,
@@ -195,6 +209,8 @@ plt_clust_map <- \(pts, areas, clust_obj) {
     ggplot2::labs(colour = "Cluster") + 
     evc_theme() + 
     ggsci::scale_colour_nejm()
+  
+  return(p)
 }
 
 #' @title Plot silhouette width on map
