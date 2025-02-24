@@ -80,7 +80,7 @@ scree_plot <- \(dist_mat, k = 1:10, fun = cluster::pam, ...) {
     k, within_cluster_sum, dist_mat, fun = fun, ..., FUN.VALUE = numeric(1)
   )
 
-  # scree plot
+  # TODO Convert to ggplot!
   plot(
     k, total_within_ss, type = "b", pch = 19,
     xlab = "Number of Clusters",
@@ -181,13 +181,13 @@ plt_clust_map <- \(pts, areas, clust_obj) {
   #   )
   
   # extract cluster membership for each site
-  clust_df <- tibble(
+  clust_df <- dplyr::tibble(
     "name" = names(clust_obj[[clust_element]]), 
     "clust" = clust_obj[[clust_element]]
   )
   # join to location data
   pts_plt <- pts |>
-    left_join(clust_df, by = "name") |>
+    dplyr::left_join(clust_df, by = "name") |>
     dplyr::mutate(
       medoid = ifelse(name %in% medoid_locs, TRUE, FALSE), 
       medoid = factor(medoid, levels = c(FALSE, TRUE))
@@ -210,77 +210,6 @@ plt_clust_map <- \(pts, areas, clust_obj) {
     evc_theme() + 
     ggsci::scale_colour_nejm()
   
-  return(p)
-}
-
-#' @title Plot silhouette width on map
-#' @description Plot silhouette width for clustering solution on map.
-#' @param pts Spatial points object
-#' @param areas Spatial polygons object
-#' @param sil_obj silhouette object
-#' @param medoids Medoid names, Default: NULL.
-#' @return ggplot object
-#' @rdname plt_sil_map
-#' @export
-plt_sil_map <- \(pts, areas, sil_obj, medoids = NULL) {
-
-  name <- medoid <- cluster <- sil_width <- NULL
-  
-  # Create spatial points object w/ cluster membership and silhouette width
-  sil_df <- sil_obj
-  if (!inherits(sil_obj, "data.frame")) {
-    sil_df <- data.frame(sil_obj)
-  }
-
-  # give message if plot likely ordered incorrectly
-  if (!all(rownames(sil_df) == sort(rownames(sil_df)))) {
-    message("sil_df not in rowname order, plot may be incorrect")
-  }
-
-  # Spatial points object
-  pts_plt <- cbind(
-    pts,
-    sil_df[, c("cluster", "sil_width")]
-  ) |>
-    dplyr::mutate(row = dplyr::row_number())
-  
-  # add medoids if desired
-  if (!is.null(medoids) && "name" %in% colnames(pts_plt)) {
-    pts_plt <- pts_plt |>
-        dplyr::mutate(
-          medoid = ifelse(name %in% medoids, TRUE, FALSE), 
-          medoid = factor(medoid, levels = c(FALSE, TRUE))
-        )
-  } 
-
-  p <- ggplot2::ggplot(areas) +
-    ggplot2::geom_sf(colour = "black", fill = NA)
-  if ("medoid" %in% names(pts_plt)) {
-    p <- p + 
-      ggplot2::geom_sf(
-        data = pts_plt,
-        ggplot2::aes(
-          colour = factor(cluster), 
-          shape = medoid, 
-          size = as.numeric(medoid), 
-          alpha = sil_width
-        )
-      ) + 
-      ggplot2::scale_shape_discrete(breaks = c(1, 15)) +
-      ggplot2::scale_size_continuous(range = c(4, 8)) +
-      ggplot2::guides(size = "none")
-  } else {
-    p <- p + 
-      ggplot2::geom_sf(
-        data = pts_plt,
-        ggplot2::aes(colour = factor(cluster), alpha = sil_width),
-        size = 5
-      )
-  }
-  p <- p + 
-    ggplot2::labs(colour = "Cluster", alpha = "Silhouette width") + 
-    evc_theme() + 
-    ggsci::scale_colour_nejm()
   return(p)
 }
 
