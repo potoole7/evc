@@ -223,7 +223,7 @@ fit_ce <- \(
       x,
       cond_prob,
       control = list(maxit = 1e6),
-      constrain = !fit_no_keef,
+      constrain = !fit_no_keef
     )
     return(o)
   })
@@ -240,7 +240,16 @@ fit_ce <- \(
 
   # output more than just dependence object, if desired
   if (output_all) {
+    
+    # original parameters (except data)
+    arg_vals <- as.list(environment())
+    arg_vals <- arg_vals[
+      !names(arg_vals) %in% c("data", "ncores", "output_all")
+    ]
+    
+    # TODO Output object with all these as attributes
     ret <- list(
+      "arg_vals"    = fun_pars,
       "thresh"      = data_thresh,
       "marginal"    = marginal,
       "transformed" = marginal_trans,
