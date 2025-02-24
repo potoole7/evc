@@ -1,6 +1,6 @@
 Package: evc
 Title: Clustering for extremes using the Conditional Extremes model
-Version: 0.2.2
+Version: 0.2.3
 Authors@R: c(person("Patrick", "O'Toole", role = c("aut", "cre"),
                     email = "paddy7wb@gmail.com"))
 Description: Description of the package in more than one full sentence.

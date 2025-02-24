@@ -1,3 +1,7 @@
+# evc 0.2.3
+
+- `fit_ce` now uses functions from `R/ce_optim.R` to fit the conditional extremes model, rather than relying on `texmex` to provide dependence parameter estimation. 
+
 # evc 0.2.2
 
 - `fit_ce` now works with use of "ordinary" `texmex::migpd`, as well as 
