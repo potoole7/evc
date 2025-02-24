@@ -11,8 +11,6 @@
 <url><loc>/reference/evc_theme.html</loc></url>
 <url><loc>/reference/fit_ce.html</loc></url>
 <url><loc>/reference/fit_evgam.html</loc></url>
-<url><loc>/reference/fit_texmex_dep.html</loc></url>
-<url><loc>/reference/gen_marg_migpd.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
 <url><loc>/reference/js_clust.html</loc></url>
 <url><loc>/reference/js_div.html</loc></url>
@@ -22,7 +20,6 @@
 <url><loc>/reference/pareto_trans.html</loc></url>
 <url><loc>/reference/partition_max.html</loc></url>
 <url><loc>/reference/plt_clust_map.html</loc></url>
-<url><loc>/reference/plt_sil_map.html</loc></url>
 <url><loc>/reference/pull_params.html</loc></url>
 <url><loc>/reference/pull_thresh_trans.html</loc></url>
 <url><loc>/reference/quantile_thresh.html</loc></url>

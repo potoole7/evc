@@ -25,7 +25,7 @@ matrix between all locations, summed across all variables.'><!-- mathjax --><scr
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">evc</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.2.2</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.2.3</span>
       </span>
     </div>
 
@@ -78,7 +78,8 @@ matrix between all locations, summed across all variables.</p>
 <span>  n_dat <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  ncores <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  par_dist <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  scree_k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span></span>
+<span>  scree_k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span>,</span>
+<span>  return_dist <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -125,6 +126,11 @@ overheads versus embarrassing parallelism over each variable, Default: FALSE.</p
 
 <dt id="arg-scree-k">scree_k<a class="anchor" aria-label="anchor" href="#arg-scree-k"></a></dt>
 <dd><p>Vector of k values to use in scree plot, if <code>k</code> is NULL.</p></dd>
+
+
+<dt id="arg-return-dist">return_dist<a class="anchor" aria-label="anchor" href="#arg-return-dist"></a></dt>
+<dd><p>Logical, whether to return distance matrix after
+clustering.</p></dd>
 
 </dl></div>
     <div id="value">
