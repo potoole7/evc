@@ -25,6 +25,8 @@
 #' @param par_dist Logical, whether to parallelise the distance computation, 
 #' which is useful for a high number of locations, but has significant 
 #' overheads versus embarrassing parallelism over each variable, Default: FALSE.
+#' @param return_dist Logical, whether to return distance matrix after 
+#' clustering. 
 #' @return List containing the clustering results and, if `cluster_mem` is
 #' provided, the adjusted Rand index.
 #' @rdname js_clust
@@ -38,7 +40,8 @@ js_clust <- \(
   n_dat        = 10,
   ncores       = 1,
   par_dist     = FALSE,
-  scree_k      = 1:5
+  scree_k      = 1:5,
+  return_dist  = FALSE
 ) {
   
   # pull parameter values for each location
@@ -139,6 +142,10 @@ js_clust <- \(
   # cluster for rain and wind speed using PAM
   # TODO: functionalise this, exact same as in kl_sim_eval!
   ret <- cluster::pam(dist_mat, k = k)
+  # return distance matrix if desired
+  if (return_dist) {
+    ret <- list("pam" = ret, "dist" = dist_mat)
+  }
   # evaluate quality
   if (!is.null(cluster_mem)) {
     adj_rand <- mclust::adjustedRandIndex(
@@ -162,13 +169,19 @@ pull_params <- \(dep) {
   # fail if not list of `mex` objects for single location
   stopifnot(is.list(dep))
   # loop through conditioning variables for single location
+  # return(lapply(dep, \(x) {
+  #   ret <- x
+  #   if  (all(ret["c", ] == 0) && all(ret["d", ] == 0)) {
+  #     ret <- ret[!rownames(ret) %in% c("c", "d"), , drop = FALSE]
+  #   }
+  #   return(ret)
+  # }))
   return(lapply(dep, \(x) {
-    # pull parameter matrix
-    ret <- x$dependence$coefficients
-    if  (all(ret["c", ] == 0) && all(ret["d", ] == 0)) {
-      ret <- ret[!rownames(ret) %in% c("c", "d"), , drop = FALSE]
+    pars <- c("a", "b", "m", "s")
+    if (all(c("c", "d") %in% rownames(x))) {
+      pars <- c("a", "b", "c", "d", "m", "s")
     }
-    return(ret)
+    return(x[rownames(x) %in% pars, , drop = FALSE])
   }))
   
 }
@@ -180,11 +193,10 @@ pull_params <- \(dep) {
 #' @return List of named vectors containing the thresholds for each location.
 #' @keywords internal
 pull_thresh_trans <- \(dep) {
-  # fail if not list of mex objects for single location
+  # fail if not list for single location
   stopifnot(is.list(dep))
-  stopifnot(all(vapply(dep, class, character(1)) == "mex"))
   # return quantile of transformed data (already calculated in texmex)
-  return(lapply(dep, \(x) x$dependence$dth))
+  return(lapply(dep, \(x) x["dth", ]))
 }
 
 #' @title Calculate KL divergence between two Gaussian distributions
