@@ -28,6 +28,4 @@ Imports:
   ismev
 Suggests:
     testthat (>= 3.0.0)
-Remotes:
-   potoole7/texmex 
 Config/testthat/edition: 3
