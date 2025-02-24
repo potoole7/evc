@@ -14,7 +14,8 @@ js_clust(
   n_dat = 10,
   ncores = 1,
   par_dist = FALSE,
-  scree_k = 1:5
+  scree_k = 1:5,
+  return_dist = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,9 @@ which is useful for a high number of locations, but has significant
 overheads versus embarrassing parallelism over each variable, Default: FALSE.}
 
 \item{scree_k}{Vector of k values to use in scree plot, if \code{k} is NULL.}
+
+\item{return_dist}{Logical, whether to return distance matrix after
+clustering.}
 }
 \value{
 List containing the clustering results and, if \code{cluster_mem} is
