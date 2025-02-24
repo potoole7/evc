@@ -98,7 +98,7 @@ fit_ce <- \(
     data_thresh <- lapply(vars, \(x) {
       data_df |>
         # remove other responses, will be joined together after
-        dplyr::select(-dplyr::matches(vars[vars != x])) |>
+        dplyr::select(-dplyr::all_of(vars[vars != x])) |>
         dplyr::mutate(
           thresh = thresh[x],
           excess = !!rlang::sym(x) - thresh
