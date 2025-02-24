@@ -165,18 +165,21 @@ Qpos <- function(param, yex, ydep, constrain, v, aLow) {
 ce_optim <- \(
   Y,
   dqu,
-  start = c("a" = 0.01, "b" = 0.01),
-  control = list(maxit = 1e6),
+  start     = c("a" = 0.01, "b" = 0.01),
+  control   = list(maxit = 1e6),
   constrain = TRUE,
-  v = 10,
-  aLow = -1
+  v         = 10,
+  aLow      = -1
 ) {
   
   # object to return if we find an error
   err_obj <- as.matrix(c("a" = NA, "b" = NA, "m" = NA, "s" = NA))
   
+  # check if start is a list (of start values for each location and variable)
+  is_list_start <- is.list(start)
+  
   # optimise for a single variable vs another
-  single_optim <- \(yex, ydep) {
+  single_optim <- \(yex, ydep, start) {
     if (any(is.infinite(yex))) {
       message("Inf values in Laplace transformed data, optimisation failed")
       return(err_obj)
@@ -185,14 +188,15 @@ ce_optim <- \(
     thresh <- stats::quantile(yex, dqu)
     wch <- yex > thresh
     o_single <- try(stats::optim(
-      par = start,
-      fn = Qpos,
-      control = control,
-      yex = yex[wch],
-      ydep = ydep[wch],
+      par       = c("a" = 0.01, "b" = 0.01),
+      # par       = start,
+      fn        = Qpos,
+      control   = control,
+      yex       = yex[wch],
+      ydep      = ydep[wch],
       constrain = constrain,
-      v = v,
-      aLow = aLow
+      v         = v,
+      aLow      = aLow
     ), silent = TRUE)
     if (inherits(o_single, "try-error")) {
       message(paste("optimisation failed for constrain =", constrain))
@@ -203,7 +207,7 @@ ce_optim <- \(
       message("No change from starting values, optimisation failed")
       return(err_obj)
     }
-    # calculate nuisance parameters from a and b estimates
+    # back-calculate nuisance parameters from a and b estimates
     if (all(!is.na(o_single$par))) {
       Z <- (ydep[wch] - yex[wch] * o_single$par[1]) /
         (yex[wch]^o_single$par[2])
@@ -213,9 +217,22 @@ ce_optim <- \(
     return(c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]]))
   }
   names_y <- colnames(Y)
+  ncol_y <- ncol(Y)
   # loop through variables, fit CE model against other variables
-  ret <- lapply(seq_len(ncol(Y)), \(i) {
-    o_yex <- apply(Y[, -i, drop = FALSE], 2, \(x) single_optim(Y[, i], x))
+  ret <- lapply(seq_len(ncol_y), \(i) {
+    o_yex <- vapply(seq_len(ncol_y - 1), \(j) {
+      # extract specific start values
+      start_spec <- start
+      if (is_list_start) {
+        start_spec <- start[[i]][, j, drop = TRUE]
+      }
+      # single_optim(Y[, i], x, start_spec)
+      single_optim(
+        Y[, i], # conditioning variable (LHS)
+        Y[, -i, drop = FALSE][, j, drop = FALSE], # conditioned variable j (RHS)
+        start_spec 
+      )
+    }, FUN.VALUE = numeric(6)) # TODO 6 outputs, change for OOP version
     if (!is.null(names_y)) {
       colnames(o_yex) <- names_y[-i]
     }

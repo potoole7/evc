@@ -14,6 +14,9 @@
 #' thresholding.
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
+#' @param start Starting values for dependence model, can be either a vector or
+#' list of lists of matrices for each conditioning variable,
+#' Default: `c("a" = 0.01, "b" = 0.01)`.
 #' @param ncores Number of cores to use for parallel computation, Default: 1.
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' @param output_all Logical argument for whether to return quantiles, `evgam`
@@ -32,14 +35,17 @@ fit_ce <- \(
   ),
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
+  start       = c("a" = 0.01, "b" = 0.01),
   ncores      = 1,
   fit_no_keef = FALSE,
   output_all  = FALSE
 ) {
+  
+  ## Setup ##
 
   # initialise to remove `devtools::check()` note
   name <- excess <- shape <- n <- NULL
-
+  
   # if marg_prob used as args to `quantile_thresh`, check args correct
   if (is.list(marg_prob)) {
     stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
@@ -51,7 +57,7 @@ fit_ce <- \(
       ))
     }
   }
-
+  
   # Parallel setup
   apply_fun <- ifelse(ncores == 1, lapply, parallel::mclapply)
   ext_args <- NULL
@@ -64,7 +70,7 @@ fit_ce <- \(
 
   # number of variables
   nvars <- length(vars)
-
+  
   # convert to data frame, if required
   if (!is.data.frame(data) && is.list(data)) {
     data_df <- dplyr::bind_rows(lapply(seq_along(data), \(i) {
@@ -88,6 +94,8 @@ fit_ce <- \(
   
   # locations
   locs <- unique(data_df$name)
+  
+  ## Threshold Selection ##
 
   # First, calculate threshold (marg_prob^(th) quantile across all locations)
   if (!is.list(marg_prob) && is.numeric(marg_prob)) {
@@ -141,11 +149,14 @@ fit_ce <- \(
     stop("marg_prob must be numeric or arguments to `quantile_thresh`")
   }
   # Only keep locs with exceedances for all vars, otherwise can't do CE!
+  # TODO evc only works for locations, add error if data not in this form!
   locs_keep <- Reduce(intersect, lapply(data_thresh, \(x) unique(x$name)))
   data_df <- dplyr::filter(data_df, name %in% locs_keep)
   data_thresh <- lapply(data_thresh, \(x)
     dplyr::filter(x, name %in% locs_keep)
   )
+  
+  ## Marginal Model ##
 
   # If f NULL, fit ordinary marginal models with `ismev::gpd.fit` for each loc
   if (is.null(f)) {
@@ -202,6 +213,36 @@ fit_ce <- \(
   }
   names(marginal) <- locs_keep
   
+  ## Dependence ##
+  
+  # Test that start values for dependence parameters (a and b)  
+  test_start <- \(start, marginal) {
+    # check same locations
+    test_loc <- length(start) == length(marginal)
+    # check same variables
+    test_var <- all(unlist(lapply(seq_along(start), \(i) {
+      length(start[[i]]) == length(marginal[[i]]) && 
+        all(names(start[[i]]) == names(marginal[[i]]))
+    })))
+    # check start values for each variable against each conditioning variable
+    test_dim <- all(unlist(lapply(seq_along(start), \(i) {
+      lapply(seq_along(start[[i]]), \(j) {
+        all(colnames(start[[i]][[j]]) == names(marginal[[i]])[-j]) && 
+          nrow(start[[i]][[j]]) == 2
+      })
+    })))
+    stopifnot(
+      "Start values not correct" = all(c(test_loc, test_var, test_dim))
+    )
+  }
+
+  # check if start values for dependence is a list
+  is_list_start <- FALSE
+  if (is.list(start)) {
+    is_list_start <- TRUE
+    test_start(start, marginal)
+  }
+  
   # Calculate dependence from marginals (default output object)
   # first, transform margins to Laplace
   marginal_trans <- lapply(seq_along(marginal), \(i) {
@@ -218,12 +259,13 @@ fit_ce <- \(
   names(marginal_trans) <- locs_keep
   
   # now fit dependence model
-  ret <- loop_fun(marginal_trans, \(x){
+  ret <- loop_fun(seq_along(marginal_trans), \(i) {
     o <- ce_optim(
-      x,
-      cond_prob,
-      control = list(maxit = 1e6),
-      constrain = !fit_no_keef
+      Y         = marginal_trans[[i]],
+      dqu       = cond_prob,
+      control   = list(maxit = 1e6),
+      constrain = !fit_no_keef, 
+      start     = start[[i]]
     )
     return(o)
   })
@@ -240,16 +282,15 @@ fit_ce <- \(
 
   # output more than just dependence object, if desired
   if (output_all) {
-    
-    # original parameters (except data)
-    arg_vals <- as.list(environment())
+    arg_vals <- as.list(match.call())[-1]  
     arg_vals <- arg_vals[
-      !names(arg_vals) %in% c("data", "ncores", "output_all")
+      !names(arg_vals) %in% c("data", "start", "ncores", "output_all")
     ]
+    arg_vals <- lapply(arg_vals, eval, envir = parent.frame())
     
     # TODO Output object with all these as attributes
     ret <- list(
-      "arg_vals"    = fun_pars,
+      "arg_vals"    = arg_vals,
       "thresh"      = data_thresh,
       "marginal"    = marginal,
       "transformed" = marginal_trans,
