@@ -18,7 +18,7 @@ quantile_thresh <- function(
   response,
   f = list(
     stats::formula(paste(response, " ~ s(lon, lat, k = 50)")), # location
-    ~ s(lon, lat, k = 40)                               # logscale
+    ~ s(lon, lat, k = 40)                                      # logscale
   ),
   tau = .95,
   jitter = TRUE,
@@ -28,6 +28,7 @@ quantile_thresh <- function(
   excess <- NULL
 
   # jitter, if specified, to remove 0s when calculating quantiles
+  # TODO Jitter has to be positive, no?
   if (jitter == TRUE) {
     data <- data |>
       dplyr::mutate(dplyr::across(
