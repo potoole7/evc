@@ -12,6 +12,9 @@
 #' @param marg_prob Can be a list of arguments to `quantile_thresh` if a
 #' variable quantile is desired, or a numeric value for simple quantile
 #' thresholding.
+#' TODO Expand marg_val to work with list of lists for each location.
+#' @param marg_val Explicit value for marginal thresholds for each variable, 
+#' only specified if marg_prob is NULL. 
 #' @param cond_prob Conditional quantile for dependence modelling.
 #' @param f Formula for `evgam` model.
 #' @param start Starting values for dependence model, can be either a vector or
@@ -33,6 +36,7 @@ fit_ce <- \(
     tau    = .95,
     jitter = TRUE
   ),
+  marg_val    = NULL,
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
   start       = c("a" = 0.01, "b" = 0.01),
@@ -56,6 +60,20 @@ fit_ce <- \(
         "each specified 'vars'"
       ))
     }
+  }
+  
+  # check marginal thresholds specified correctly
+  if (is.null(marg_val) && is.null(marg_prob)) { # must provide one
+    stop("you must provide one of mth or mqu")
+  }
+  if (!is.null(marg_val) && !is.null(marg_prob)) { # must provide only one
+    stop("you must provide precisely one of marg_val or marg_prob")
+  }
+  # must have marginal values for each variable
+  # TODO Expand so marg_val can be a list of locations like `start`
+  # TODO Expand so marg_val can be a list of dataframes with varying thresh
+  if (!is.null(marg_val) && is.numeric(marg_val)) { 
+    stopifnot(length(marg_val) == length(vars) && all(names(marg_val) == vars))
   }
   
   # Parallel setup
@@ -97,19 +115,24 @@ fit_ce <- \(
   
   ## Threshold Selection ##
 
-  # First, calculate threshold (marg_prob^(th) quantile across all locations)
-  if (!is.list(marg_prob) && is.numeric(marg_prob)) {
-    thresh <- apply(
-      data_df[, c(vars)], 2, stats::quantile, marg_prob, na.rm = TRUE
-    )
+  # If threshold isn't modelled:
+  # If marg_val not specified, calculate thresh as quantile across all locs
+  # TODO Allow marg_val to change by location
+  if (is.null(marg_prob) || (!is.list(marg_prob) && is.numeric(marg_prob))) {
+    # TODO Could also calculate for each location/name??
+    if (is.null(marg_val)) {
+      marg_val <- apply(
+        data_df[, c(vars)], 2, stats::quantile, marg_prob, na.rm = TRUE
+      )
+    }
     # for each variable, calculate excess over threshold
     data_thresh <- lapply(vars, \(x) {
       data_df |>
         # remove other responses, will be joined together after
         dplyr::select(-dplyr::all_of(vars[vars != x])) |>
         dplyr::mutate(
-          thresh = thresh[x],
-          excess = !!rlang::sym(x) - thresh
+          thresh = marg_val[x],
+          excess = !!rlang::sym(x) - marg_val[x]
         ) |>
         dplyr::filter(excess > 0)
     })
@@ -247,10 +270,11 @@ fit_ce <- \(
   # first, transform margins to Laplace
   marginal_trans <- lapply(seq_along(marginal), \(i) {
     # semi-parametric CDF
+    # TODO: More efficient to also split data_df by name and subset with i
     F_hat <- data_df |>
       dplyr::filter(name == locs_keep[i]) |>
       dplyr::select(dplyr::all_of(vars)) |>
-      semi_par(marginal[[i]])
+      semi_par_cdf(marginal[[i]])
     # Laplace transform
     Y <- laplace_trans(F_hat)
     colnames(Y) <- vars
@@ -260,15 +284,19 @@ fit_ce <- \(
   
   # now fit dependence model
   ret <- loop_fun(seq_along(marginal_trans), \(i) {
+    if (is_list_start) {
+      start_spec <- start[[i]]
+    } else start_spec <- start
     o <- ce_optim(
       Y         = marginal_trans[[i]],
       dqu       = cond_prob,
       control   = list(maxit = 1e6),
       constrain = !fit_no_keef, 
-      start     = start[[i]]
+      start     = start_spec
     )
     return(o)
   })
+  names(ret) <- locs_keep
   
   # check that all dependence models have run successfully, message if not
   locs_fail <- locs_keep[vapply(ret, \(x) any(is.na(unlist(x))), logical(1))]
@@ -288,11 +316,16 @@ fit_ce <- \(
     ]
     arg_vals <- lapply(arg_vals, eval, envir = parent.frame())
     
+    # original data
+    orig_dat <- dplyr::group_split(data_df, name, .keep = FALSE)
+    names(orig_dat) <- locs_keep
+    
     # TODO Output object with all these as attributes
     ret <- list(
       "arg_vals"    = arg_vals,
       "thresh"      = data_thresh,
       "marginal"    = marginal,
+      "original"    = orig_dat,
       "transformed" = marginal_trans,
       "dependence"  = ret
     )
