@@ -1,7 +1,3 @@
-`%||%` <- function(x, y) { # nolint
-  if (is.null(x)) y else x
-}
-
 #' @title Calculate adjacency matrix from Voronoi cells
 #' @description Calculate adjacency matrix from Voronoi cells
 #' @param pts Spatial points object
