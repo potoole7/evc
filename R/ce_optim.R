@@ -4,7 +4,7 @@
 
 # TODO: Document these functions
 # Semiparametric CDF
-semi_par <- \(dat, gpd, n = nrow(dat)) {
+semi_par_cdf <- \(dat, gpd, n = nrow(dat)) {
   # As in Heff & Tawn '04, semiparametric mod uses ecdf below thresh, GPD above
   return(vapply(seq_along(gpd), \(i) {
     dat_spec <- dat[, i, drop = TRUE]
@@ -42,11 +42,70 @@ semi_par <- \(dat, gpd, n = nrow(dat)) {
   }, FUN.VALUE = numeric(n)))
 }
 
+# Reverse semiparametric CDF, giving data back on original scale
+inv_semi_par_cdf <- function(F_hat, dat, gpd) {
+  return(vapply(seq_along(gpd), function(i) {
+    dat_spec <- dat[, i, drop = TRUE]
+    stopifnot(names(gpd[[i]]) == c("sigma", "xi", "thresh"))
+    
+    spec_sigma <- gpd[[i]][[1]]
+    spec_xi <- gpd[[i]][[2]]
+    spec_loc <- gpd[[i]][[3]]
+    
+    n <- length(dat_spec)
+    probs <- (1:n) / (n + 1) # Empirical CDF probabilities 
+    
+    # Find closest probability match for each F_hat value
+    px <- vapply(F_hat[, i], function(x, p) {
+      p[[which.min(abs(x - p))]]  # Nearest empirical CDF probability
+    }, 0, p = probs)
+    
+    px <- as.integer(round(px * (1 + n)))
+    res <- sort(dat_spec)[px]  # Get corresponding data values
+    
+    # Adjust upper tail using GPD if above threshold
+    i_F <- F_hat[, i] >= mean(dat_spec <= spec_loc)  # Upper tail condition
+    i_res <- res > spec_loc  # Above threshold in reconstructed values
+    i_adjust <- i_F & i_res  # Both conditions met
+    
+    if (sum(i_adjust) > 0) {
+      # Compute inverse GPD transformation
+      p_above <- (1 - F_hat[i_adjust, i]) / mean(dat_spec > spec_loc)
+      gpd_vals <- spec_loc + (spec_sigma / spec_xi) * 
+        ((pmax(0, p_above)^(-spec_xi)) - 1)
+      
+      # Order properly
+      ordered_res <- res[i_adjust]
+      order_idx <- order(ordered_res)
+      ordered_res <- ordered_res[order_idx]
+      ordered_res[
+        length(ordered_res):(length(ordered_res) - length(gpd_vals) + 1)
+      ] <- rev(sort(gpd_vals))
+      ordered_res <- ordered_res[order(order_idx)]
+      
+      res[i_adjust] <- ordered_res
+    }
+    
+    # Ensure final ordering matches input ordering
+    res[order(F_hat[, i])] <- sort(res)
+    
+    return(res)
+  }, FUN.VALUE = numeric(nrow(F_hat))))
+}
+
+
 # transform to Laplace margins
 laplace_trans <- \(F_hat, tol = .Machine$double.eps) {
   apply(F_hat, 2, \(x) {
     y <- pmin(pmax(x, tol), 1 - tol) 
     return(ifelse(y < 0.5, log(2 * y), -log(2 * (1 - y))))
+  })
+}
+
+# back transform to original margins (i.e. CDF)
+inv_laplace_trans <- \(F_hat) {
+  apply(F_hat, 2, \(x) {
+    ifelse(x < 0, exp(x) / 2, 1 - exp(-x) / 2)
   })
 }
 
@@ -173,7 +232,8 @@ ce_optim <- \(
 ) {
   
   # object to return if we find an error
-  err_obj <- as.matrix(c("a" = NA, "b" = NA, "m" = NA, "s" = NA))
+  # err_obj <- as.matrix(c("a" = NA, "b" = NA, "m" = NA, "s" = NA))
+  err_obj <- c("a" = NA, "b" = NA, "m" = NA, "s" = NA, "ll" = NA, "dth" = NA)
   
   # check if start is a list (of start values for each location and variable)
   is_list_start <- is.list(start)
@@ -188,8 +248,7 @@ ce_optim <- \(
     thresh <- stats::quantile(yex, dqu)
     wch <- yex > thresh
     o_single <- try(stats::optim(
-      par       = c("a" = 0.01, "b" = 0.01),
-      # par       = start,
+      par       = start,
       fn        = Qpos,
       control   = control,
       yex       = yex[wch],
@@ -202,8 +261,8 @@ ce_optim <- \(
       message(paste("optimisation failed for constrain =", constrain))
       return(err_obj)
     }
-    # set to NA if no change from starting values
-    if (all(o_single$par[1:2] == start)) {
+    # set to NA if no change from (default!) starting values 
+    if (all(o_single$par[1:2] == start) && all(start == 0.01)) {
       message("No change from starting values, optimisation failed")
       return(err_obj)
     }
@@ -212,6 +271,8 @@ ce_optim <- \(
       Z <- (ydep[wch] - yex[wch] * o_single$par[1]) /
         (yex[wch]^o_single$par[2])
       o_single$par <- c(o_single$par[1:2], "m" = mean(Z), "s" = stats::sd(Z))
+    } else {
+      o_single$par <- c(o_single$par, "m" = NA, "s" = NA)
     }
     # TODO: Add checks afterwards on o
     return(c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]]))
@@ -226,7 +287,6 @@ ce_optim <- \(
       if (is_list_start) {
         start_spec <- start[[i]][, j, drop = TRUE]
       }
-      # single_optim(Y[, i], x, start_spec)
       single_optim(
         Y[, i], # conditioning variable (LHS)
         Y[, -i, drop = FALSE][, j, drop = FALSE], # conditioned variable j (RHS)
