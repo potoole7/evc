@@ -56,10 +56,16 @@
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">fit_ce</span><span class="op">(</span></span>
 <span>  <span class="va">data</span>,</span>
 <span>  vars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rain"</span>, <span class="st">"wind_speed"</span><span class="op">)</span>,</span>
+<span>  cond_var <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  marg_prob <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>f <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"response ~ name"</span>, <span class="st">"~ name"</span><span class="op">)</span>, tau <span class="op">=</span> <span class="fl">0.95</span>, jitter <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  thresh_fun <span class="op">=</span> <span class="va">evgam_ald_thresh</span>,</span>
+<span>  marg_val <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cond_prob <span class="op">=</span> <span class="fl">0.9</span>,</span>
 <span>  f <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">excess</span> <span class="op">~</span> <span class="va">name</span>, <span class="op">~</span><span class="fl">1</span><span class="op">)</span>,</span>
+<span>  start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>a <span class="op">=</span> <span class="fl">0.01</span>, b <span class="op">=</span> <span class="fl">0.01</span><span class="op">)</span>,</span>
 <span>  ncores <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  thresh_only <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  marg_only <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  fit_no_keef <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  output_all <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -71,17 +77,34 @@
 
 <dl><dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
 <dd><p>List of dataframes at each location containing data for each
-variable.</p></dd>
+variable. Optionally, can be an object of class <code>evc_marg</code> from a previous
+call to <code>fit_ce</code>, with elements <code>marginal</code>, <code>data_thresh</code> and <code>original</code>.</p></dd>
 
 
 <dt id="arg-vars">vars<a class="anchor" aria-label="anchor" href="#arg-vars"></a></dt>
 <dd><p>Variable names for each location.</p></dd>
 
 
+<dt id="arg-cond-var">cond_var<a class="anchor" aria-label="anchor" href="#arg-cond-var"></a></dt>
+<dd><p>Conditioning variable for dependence model, if not specified
+then calculated for all.</p></dd>
+
+
 <dt id="arg-marg-prob">marg_prob<a class="anchor" aria-label="anchor" href="#arg-marg-prob"></a></dt>
-<dd><p>Can be a list of arguments to <code>quantile_thresh</code> if a
+<dd><p>Can be a list of arguments to <code>evgam_ald_thresh</code> if a
 variable quantile is desired, or a numeric value for simple quantile
 thresholding.</p></dd>
+
+
+<dt id="arg-thresh-fun">thresh_fun<a class="anchor" aria-label="anchor" href="#arg-thresh-fun"></a></dt>
+<dd><p>Function to threshold data, default is <code>evgam_ald_thresh</code>,
+alternative is <code>qgam_thresh</code>.
+TODO Expand marg_val to work with list of lists for each location.</p></dd>
+
+
+<dt id="arg-marg-val">marg_val<a class="anchor" aria-label="anchor" href="#arg-marg-val"></a></dt>
+<dd><p>Explicit value for marginal thresholds for each variable,
+only specified if marg_prob is NULL.</p></dd>
 
 
 <dt id="arg-cond-prob">cond_prob<a class="anchor" aria-label="anchor" href="#arg-cond-prob"></a></dt>
@@ -92,8 +115,22 @@ thresholding.</p></dd>
 <dd><p>Formula for <code>evgam</code> model.</p></dd>
 
 
+<dt id="arg-start">start<a class="anchor" aria-label="anchor" href="#arg-start"></a></dt>
+<dd><p>Starting values for dependence model, can be either a vector or
+list of lists of matrices for each conditioning variable,
+Default: <code>c("a" = 0.01, "b" = 0.01)</code>.</p></dd>
+
+
 <dt id="arg-ncores">ncores<a class="anchor" aria-label="anchor" href="#arg-ncores"></a></dt>
 <dd><p>Number of cores to use for parallel computation, Default: 1.</p></dd>
+
+
+<dt id="arg-thresh-only">thresh_only<a class="anchor" aria-label="anchor" href="#arg-thresh-only"></a></dt>
+<dd><p>Logical argument for whether to only threshold data.</p></dd>
+
+
+<dt id="arg-marg-only">marg_only<a class="anchor" aria-label="anchor" href="#arg-marg-only"></a></dt>
+<dd><p>Logical argument for whether to only fit marginal models.</p></dd>
 
 
 <dt id="arg-fit-no-keef">fit_no_keef<a class="anchor" aria-label="anchor" href="#arg-fit-no-keef"></a></dt>

@@ -9,6 +9,7 @@
 <url><loc>/reference/calc_prop.html</loc></url>
 <url><loc>/reference/emp_kl_div.html</loc></url>
 <url><loc>/reference/evc_theme.html</loc></url>
+<url><loc>/reference/evgam_ald_thresh.html</loc></url>
 <url><loc>/reference/fit_ce.html</loc></url>
 <url><loc>/reference/fit_evgam.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
@@ -22,7 +23,7 @@
 <url><loc>/reference/plt_clust_map.html</loc></url>
 <url><loc>/reference/pull_params.html</loc></url>
 <url><loc>/reference/pull_thresh_trans.html</loc></url>
-<url><loc>/reference/quantile_thresh.html</loc></url>
+<url><loc>/reference/qgam_thresh.html</loc></url>
 <url><loc>/reference/risk_fun.html</loc></url>
 <url><loc>/reference/scree_plot.html</loc></url>
 <url><loc>/reference/sil_boxplot.html</loc></url>
