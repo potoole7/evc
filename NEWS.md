@@ -1,3 +1,7 @@
+# evc 0.2.4
+
+- `quantile_thresh` has now been replaced by separate `qgam_thresh` and `evgam_ald_thresh` functions to optionally model thresholds across space using `qgam::qgam` and `evgam::evgam(..., family = "ald")`, respectively. 
+
 # evc 0.2.3
 
 - `fit_ce` now uses functions from `R/ce_optim.R` to fit the conditional extremes model, rather than relying on `texmex` to provide dependence parameter estimation. 
