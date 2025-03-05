@@ -7,29 +7,54 @@
 fit_ce(
   data,
   vars = c("rain", "wind_speed"),
+  cond_var = NULL,
   marg_prob = list(f = list("response ~ name", "~ name"), tau = 0.95, jitter = TRUE),
+  thresh_fun = evgam_ald_thresh,
+  marg_val = NULL,
   cond_prob = 0.9,
   f = list(excess ~ name, ~1),
+  start = c(a = 0.01, b = 0.01),
   ncores = 1,
+  thresh_only = FALSE,
+  marg_only = FALSE,
   fit_no_keef = FALSE,
   output_all = FALSE
 )
 }
 \arguments{
 \item{data}{List of dataframes at each location containing data for each
-variable.}
+variable. Optionally, can be an object of class \code{evc_marg} from a previous
+call to \code{fit_ce}, with elements \code{marginal}, \code{data_thresh} and \code{original}.}
 
 \item{vars}{Variable names for each location.}
 
-\item{marg_prob}{Can be a list of arguments to \code{quantile_thresh} if a
+\item{cond_var}{Conditioning variable for dependence model, if not specified
+then calculated for all.}
+
+\item{marg_prob}{Can be a list of arguments to \code{evgam_ald_thresh} if a
 variable quantile is desired, or a numeric value for simple quantile
 thresholding.}
+
+\item{thresh_fun}{Function to threshold data, default is \code{evgam_ald_thresh},
+alternative is \code{qgam_thresh}.
+TODO Expand marg_val to work with list of lists for each location.}
+
+\item{marg_val}{Explicit value for marginal thresholds for each variable,
+only specified if marg_prob is NULL.}
 
 \item{cond_prob}{Conditional quantile for dependence modelling.}
 
 \item{f}{Formula for \code{evgam} model.}
 
+\item{start}{Starting values for dependence model, can be either a vector or
+list of lists of matrices for each conditioning variable,
+Default: \code{c("a" = 0.01, "b" = 0.01)}.}
+
 \item{ncores}{Number of cores to use for parallel computation, Default: 1.}
+
+\item{thresh_only}{Logical argument for whether to only threshold data.}
+
+\item{marg_only}{Logical argument for whether to only fit marginal models.}
 
 \item{fit_no_keef}{If model doesn't fit under Keef constraints, fit without}
 
