@@ -7,11 +7,16 @@
 #' @title Fit Conditional Extremes model
 #' @description Fit Conditional Extremes model using marginal fits form `evgam`.
 #' @param data List of dataframes at each location containing data for each
-#' variable.
+#' variable. Optionally, can be an object of class `evc_marg` from a previous
+#' call to `fit_ce`, with elements `marginal`, `data_thresh` and `original`.
 #' @param vars Variable names for each location.
-#' @param marg_prob Can be a list of arguments to `quantile_thresh` if a
+#' @param cond_var Conditioning variable for dependence model, if not specified
+#' then calculated for all. 
+#' @param marg_prob Can be a list of arguments to `evgam_ald_thresh` if a
 #' variable quantile is desired, or a numeric value for simple quantile
 #' thresholding.
+#' @param thresh_fun Function to threshold data, default is `evgam_ald_thresh`, 
+#' alternative is `qgam_thresh`.
 #' TODO Expand marg_val to work with list of lists for each location.
 #' @param marg_val Explicit value for marginal thresholds for each variable, 
 #' only specified if marg_prob is NULL. 
@@ -21,6 +26,8 @@
 #' list of lists of matrices for each conditioning variable,
 #' Default: `c("a" = 0.01, "b" = 0.01)`.
 #' @param ncores Number of cores to use for parallel computation, Default: 1.
+#' @param thresh_only Logical argument for whether to only threshold data.
+#' @param marg_only Logical argument for whether to only fit marginal models.
 #' @param fit_no_keef If model doesn't fit under Keef constraints, fit without
 #' @param output_all Logical argument for whether to return quantiles, `evgam`
 #' and marginal fits.
@@ -30,17 +37,20 @@
 #' @export
 fit_ce <- \(
   data,
-  vars = c("rain", "wind_speed"),
-  marg_prob = list(
-    f      = list("response ~ name", "~ name"), # must be as character
-    tau    = .95,
-    jitter = TRUE
+  vars        = c("rain", "wind_speed"),
+  cond_var    = NULL,
+  marg_prob   = list(
+    f          = list("response ~ name", "~ name"), # must be as character
+    tau        = .95,
+    jitter     = TRUE
   ),
+  thresh_fun  = evgam_ald_thresh,
   marg_val    = NULL,
   cond_prob   = 0.9,
   f           = list(excess ~ name, ~ 1), # keep shape constant for now
   start       = c("a" = 0.01, "b" = 0.01),
   ncores      = 1,
+  thresh_only = FALSE,
   marg_only   = FALSE,
   fit_no_keef = FALSE,
   output_all  = FALSE
@@ -49,7 +59,7 @@ fit_ce <- \(
   ## Setup ##
 
   # initialise to remove `devtools::check()` note
-  name <- excess <- shape <- n <- NULL
+  name <- excess <- shape <- n <- thresh <- NULL
   
   # number of variables
   nvars <- length(vars)
@@ -67,9 +77,9 @@ fit_ce <- \(
   # code for marginal model 
   # TODO Make it's own function outside of `fit_ce`
   evc_marg <- \() {
-    # if marg_prob used as args to `quantile_thresh`, check args correct
+    # if marg_prob used as args to thresh_fun, check args correct
     if (is.list(marg_prob)) {
-      stopifnot(all(names(marg_prob) %in% names(formals(quantile_thresh))))
+      stopifnot(all(names(marg_prob) %in% names(formals(thresh_fun))))
       stopifnot(is.list(marg_prob$f))
       if (!all(vapply(marg_prob$f, is.character, logical(1)))) {
         stop(paste(
@@ -81,7 +91,7 @@ fit_ce <- \(
     
     # check marginal thresholds specified correctly
     if (is.null(marg_val) && is.null(marg_prob)) { # must provide one
-      stop("you must provide one of mth or mqu")
+      stop("you must provide one of marg_val or marg_prob")
     }
     if (!is.null(marg_val) && !is.null(marg_prob)) { # must provide only one
       stop("you must provide precisely one of marg_val or marg_prob")
@@ -142,7 +152,7 @@ fit_ce <- \(
           ) |>
           dplyr::filter(excess > 0)
       })
-      # If thresh is a list, assume it is arguments to quantile_thresh
+      # If thresh is a list, assume it is arguments to thresh_fun
       # TODO: May be easier to just copy each vars column as response in data_df
       # Would allow for simpler formula specification
     } else if (is.list(marg_prob)) {
@@ -153,14 +163,16 @@ fit_ce <- \(
           stats::formula(stringr::str_replace_all(f_spec, "response", x))
         })
         
-        # Run `quantile_thresh` for each response with specified args
-        ret <- do.call(
-          quantile_thresh,
+        # Run thresholding function for each response with specified args
+        # TODO Also return evgam fits to ald 
+        quantile_fits <- do.call(
+          thresh_fun,
           args = c(
             list(data = data_df, response = x), # data args
             spec_params
           )
         )
+        ret <- quantile_fits$data_thresh
         
         # return message where no exceedances are observed for any locations
         thresh_locs <- unique(ret$name)
@@ -175,15 +187,29 @@ fit_ce <- \(
         return(ret)
       })
     } else {
-      stop("marg_prob must be numeric or arguments to `quantile_thresh`")
+      stop(paste0(
+        "marg_prob must be numeric or arguments to ",
+        deparse(substitute(marg_fun))
+      ))
     }
     # Only keep locs with exceedances for all vars, otherwise can't do CE!
     # TODO evc only works for locations, add error if data not in this form!
     locs_keep <- Reduce(intersect, lapply(data_thresh, \(x) unique(x$name)))
     data_df <- dplyr::filter(data_df, name %in% locs_keep)
     data_thresh <- lapply(data_thresh, \(x)
-      dplyr::filter(x, name %in% locs_keep)
+      dplyr::filter(x, name %in% locs_keep) |> 
+        # remove duplicate thresholded rows kept through floating point errors
+        dplyr::group_by(
+          name, 
+          dplyr::across(dplyr::any_of(c("date", !!vars)))
+        ) |> 
+        dplyr::slice(1) |> 
+        dplyr::ungroup()
     )
+    # TODO Add option to only return thresholded data!
+    if (thresh_only) {
+      return(list("data_thresh" = data_thresh, "original" = data_df))
+    }
     
     ## Marginal Model ##
   
@@ -196,13 +222,16 @@ fit_ce <- \(
           # pull marginal thresholds
           mth <- vapply(data_thresh, \(y) {
             y |>
-              dplyr::filter(name == x$name[[1]]) |> # need thresh for correct loc
+              # need thresh for correct loc
+              dplyr::filter(name == x$name[[1]]) |> 
               dplyr::slice(1) |>
               dplyr::pull(thresh)
           }, numeric(1))
           # texmex::migpd(as.matrix(x[, vars]), mth = mth)
           gpd_fits <- lapply(seq_along(vars), \(i) {
-            fit <- ismev::gpd.fit(x[[vars[i]]], threshold = mth[i], show = FALSE)
+            fit <- ismev::gpd.fit(
+              x[[vars[i]]], threshold = mth[i], show = FALSE
+            )
             return(list(
               "sigma"     = fit$mle[1], 
               "xi"        = fit$mle[2], 
@@ -227,12 +256,24 @@ fit_ce <- \(
       marginal <- lapply(seq_along(evgam_fit), \(i) {
         
         # pull for each location (or predictor combo)
-        params <- dplyr::distinct(
-          evgam_fit[[i]]$predictions, sigma = scale, xi = shape
+        # using signif to account for floating point errors
+        params_df <- dplyr::select(
+          evgam_fit[[i]]$predictions, name, sigma = scale, xi = shape
         ) |>
-          # TODO Assumes threshs in same order as evgam preds, may lead to bugs
-          dplyr::mutate(thresh = unique(data_thresh[[i]]$thresh)) |>
-          dplyr::group_split(dplyr::row_number(), .keep = FALSE) |>
+          dplyr::distinct(signif(sigma, 6), signif(xi, 6), .keep_all = TRUE) |> 
+          # also pull in thresholds
+          dplyr::left_join(
+            dplyr::select(data_thresh[[i]], name, thresh) |> 
+            dplyr::distinct(name, signif(thresh, 6), .keep_all = TRUE)
+          ) |> 
+          dplyr::select(-dplyr::matches("signif"))
+          
+        # split into list by name as dependence pars will also be this way
+        loc_names_spec <- unique(params_df$name)
+        params_df |> 
+          # dplyr::group_split(dplyr::row_number(), .keep = FALSE) |> 
+          dplyr::group_split(name, .keep = FALSE) |> 
+          setNames(loc_names_spec) |>
           lapply(as.vector, mode = "list")
       })
       names(marginal) <- vars
@@ -242,35 +283,51 @@ fit_ce <- \(
     }
     
     # original data
-    orig_dat <- dplyr::group_split(data_df, name, .keep = FALSE)
-    names(orig_dat) <- locs_keep
-    
-    names(marginal) <- locs_keep
+    orig_dat <- as.list(dplyr::group_split(data_df, name, .keep = TRUE))
+    names(orig_dat) <- names(marginal) <- locs_keep
+    names(data_thresh) <- vars
     ret <- list(
-      "marginal" = marginal, "data_thresh" = data_thresh, "orig" = orig_dat
+      "marginal" = marginal, "data_thresh" = data_thresh, "original" = orig_dat
     )
-    class(ret) <- "evc_marg"
+    # add evgam fit object if fitted
+    if (exists("evgam_fit", envir = environment())) {
+      names(evgam_fit) <- vars
+      ret$evgam_fit <- evgam_fit
+    }
+    # make ret object of class `evc_marg`
+    class(ret) <- c("evc_marg", class(ret))
     return(ret)
   }
   
-  # if data not of class `evc_marg`, run marginal model
-  if(!inherits(data, "evc_marg") && 
-     all(names(data) == c("marginal", "data_thresh", "orig"))) {
-    marg_out <- evc_marg()
-    # extract list objects
-  } else {
+  # if data of class `evc_marg`, no need to run marginal model
+  # TODO Add clause where we can provide thresholded data already to function
+  # TODO Improve this condition, very messy + ugly!!
+  if(
+    inherits(data, "evc_marg") && 
+    (all(names(dep_args$data) %in% c(
+      "marginal", "data_thresh", "original", "evgam_fit"
+      )
+    ))) {
     marg_out <- data
-    marginal <- data$marginal
+  } else {
+    marg_out <- evc_marg()
   }
   marginal <- marg_out$marginal
+  data_df <- dplyr::bind_rows(marg_out$orig)
   # if only marginal model required, return
-  if (marg_only = TRUE) {
+  if (marg_only) {
     return(marg_out)
   }
   locs_keep <- names(marginal)
   
    
   ## Dependence ##
+  
+  # conditioning variables default to all
+  if (is.null(cond_var)) {
+    cond_var <- vars
+  }
+  stopifnot("cond_var not in variables, check again" = cond_var %in% vars)
   
   # Test that start values for dependence parameters (a and b)  
   test_start <- \(start, marginal) {
@@ -298,6 +355,12 @@ fit_ce <- \(
   if (is.list(start)) {
     is_list_start <- TRUE
     test_start(start, marginal)
+    # keep start values only for conditioned variables
+    if (all(cond_var == vars) == FALSE) {
+      start <- lapply(start, \(x) {
+        x[names(x) %in% cond_var]
+      })
+    }
   }
   
   # Calculate dependence from marginals (default output object)
