@@ -380,23 +380,40 @@ fit_ce <- \(
   names(marginal_trans) <- locs_keep
   
   # now fit dependence model
-  ret <- loop_fun(seq_along(marginal_trans), \(i) {
+  dependence <- loop_fun(seq_along(marginal_trans), \(i) {
     if (is_list_start) {
       start_spec <- start[[i]]
     } else start_spec <- start
     o <- ce_optim(
       Y         = marginal_trans[[i]],
       dqu       = cond_prob,
+      cond_var  = cond_var,
       control   = list(maxit = 1e6),
       constrain = !fit_no_keef, 
       start     = start_spec
     )
     return(o)
   })
-  names(ret) <- locs_keep
+  
+  # recursively pull dependence parameters and residuals out separately
+  pull_element <- \(x, element) {
+    if (element %in% names(x)) {
+      return(x[[element]])
+    } else {
+      lapply(x, pull_element, element)
+    }
+  }
+  resid    <- pull_element(dependence, "resid")
+  dep_pars <- pull_element(dependence, "params")
+  ret <- list(
+    "residual"   = resid, 
+    "dependence" = dep_pars
+  )
   
   # check that all dependence models have run successfully, message if not
-  locs_fail <- locs_keep[vapply(ret, \(x) any(is.na(unlist(x))), logical(1))]
+  locs_fail <- locs_keep[
+    vapply(dep_pars, \(x) any(is.na(unlist(x))), logical(1))
+  ]
   if (length(locs_fail) > 0) {
     message(paste0(
       length(locs_fail), 
@@ -416,15 +433,9 @@ fit_ce <- \(
     # TODO Output object with all these as attributes
     ret <- c(
       marg_out,
-      list(
-        "arg_vals"    = arg_vals,
-        "transformed" = marginal_trans,
-        "dependence"  = ret
-      )
+      ret,
+      list("arg_vals" = arg_vals, "transformed" = marginal_trans)
     )
-    if (exists("evgam_fit", envir = environment())) {
-      ret$evgam_fit <- evgam_fit
-    }
   }
   return(ret)
 }

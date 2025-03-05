@@ -224,6 +224,7 @@ Qpos <- function(param, yex, ydep, constrain, v, aLow) {
 ce_optim <- \(
   Y,
   dqu,
+  cond_var,
   start     = c("a" = 0.01, "b" = 0.01),
   control   = list(maxit = 1e6),
   constrain = TRUE,
@@ -232,8 +233,11 @@ ce_optim <- \(
 ) {
   
   # object to return if we find an error
-  # err_obj <- as.matrix(c("a" = NA, "b" = NA, "m" = NA, "s" = NA))
-  err_obj <- c("a" = NA, "b" = NA, "m" = NA, "s" = NA, "ll" = NA, "dth" = NA)
+  # err_obj <- c("a" = NA, "b" = NA, "m" = NA, "s" = NA, "ll" = NA, "dth" = NA)
+  err_obj <- list(
+    "resid"  = matrix(NA), 
+    "params" = c("a" = NA, "b" = NA, "m" = NA, "s" = NA, "ll" = NA, "dth" = NA)
+  )
   
   # check if start is a list (of start values for each location and variable)
   is_list_start <- is.list(start)
@@ -274,32 +278,53 @@ ce_optim <- \(
     } else {
       o_single$par <- c(o_single$par, "m" = NA, "s" = NA)
     }
-    # TODO: Add checks afterwards on o
-    return(c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]]))
+    # TODO Add checks afterwards on o
+    # TODO Add Z to output
+    # return(c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]]))
+    return(list(
+      "resid"  = matrix(Z),
+      "params" = c(o_single$par, "ll" = o_single$value, "dth" = thresh[[1]])
+    ))
   }
-  names_y <- colnames(Y)
+  names_y <- colnames(Y) 
   ncol_y <- ncol(Y)
   # loop through variables, fit CE model against other variables
-  ret <- lapply(seq_len(ncol_y), \(i) {
-    o_yex <- vapply(seq_len(ncol_y - 1), \(j) {
+  ret <- lapply(seq_along(cond_var), \(i) {
+    # o_yex <- vapply(seq_len(ncol_y - 1), \(j) {
+    # loop through conditioning variables
+    # TODO How will this work for returning 
+    o_yex <- lapply(seq_len(ncol_y - 1), \(j) {
       # extract specific start values
       start_spec <- start
       if (is_list_start) {
         start_spec <- start[[i]][, j, drop = TRUE]
       }
-      single_optim(
-        Y[, i], # conditioning variable (LHS)
-        Y[, -i, drop = FALSE][, j, drop = FALSE], # conditioned variable j (RHS)
+       single_optim(
+        # Y[, i], # conditioning variable (LHS)
+        Y[, which(colnames(Y) == cond_var[i])],
+        # Y[, -i, drop = FALSE][, j, drop = FALSE], # conditioned variable j (RHS)
+        # j'th conditioned variable (RHS of CE model)
+        Y[, -which(colnames(Y) == cond_var[i]), drop = FALSE][
+          , j, drop = FALSE
+        ], 
         start_spec 
       )
-    }, FUN.VALUE = numeric(6)) # TODO 6 outputs, change for OOP version
+    # }, FUN.VALUE = numeric(6)) # TODO 6 outputs, change for OOP version
+    })
+    
+    # join matrices from lists (each column will be for each conditioning var)
+    o_yex <- list(
+       "resid"  = do.call(cbind, lapply(o_yex, `[[`, "resid")),
+       "params" = do.call(cbind, lapply(o_yex, `[[`, "params"))
+    )
+    
     if (!is.null(names_y)) {
-      colnames(o_yex) <- names_y[-i]
+      names_other <- names_y[names_y != cond_var[[i]]]
+      colnames(o_yex$resid) <- names_other
+      colnames(o_yex$params) <- names_other
     }
     return(o_yex)
   })
-  if (!is.null(names_y)) {
-    names(ret) <- names_y
-  }
+  names(ret) <- cond_var
   return(ret)
 }
